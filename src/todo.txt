@@ -1,0 +1,30 @@
+col_cell
+  assume cell contains no internal vertices
+  collapse bounding edges, until a single entity(edge, tri, tet for 
+  1-,2-,3-cell) remains
+  call the appropriate last entity collapse
+
+load_ent(apf::MeshEntity* ent)
+  collapsing ent
+  collapsing cell
+    bounding cells
+
+  number of edges
+  get the edges
+  for(
+    get_lens(edge)
+
+get_lens(edge)
+  add the lens information
+    edge_mer
+    surf_mer
+    surf_col
+    elem_col
+    _em
+
+    calc_topo ()
+
+
+col_lens()
+  check for extra merging entities, split them
+  check merging entity flags, split inappropriate ones
