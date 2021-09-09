@@ -4,18 +4,28 @@ VDLIB is an open source library for simulating grain growth. It is based on  [SC
 
 ## Reference ##
 More detailed information about the method is available on the arXiv:
-[Topological transitions during grain growth on a finite element mesh](https://arxiv.org/abs/2101.12321)
+[Topological transitions during grain growth on a finite element mesh](https://arxiv.org/abs/2101.12321).
 
 ## Dependencies ##
 ### MPI ###
+This version is built with [OpenMPI v. 3.1.2](https://download.open-mpi.org/release/open-mpi/v3.1/openmpi-3.1.2.tar.gz).
 
 ### GSL ###
+This version is built with [GSL v. 2.5](https://ftp.sotirov-bg.net/pub/mirrors/gnu/gsl/gsl-2.5.tar.gz).
 
 ### SCOREC ###
-This version is built with a specific commit of SCOREC and has not been updated to work with the later versions. The commit hash is provided below:
+This version is built with a specific commit of SCOREC and has not been updated and guaranteed to work with the later versions. The commit hash is provided below:
 
 git clone -n https://github.com/SCOREC/core.git
 git checkout c341ecd5bf908369d21cca095b067ce6ef4f4e19
+
+## License ##
+VDlib is licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or https://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or https://opensource.org/licenses/MIT)
+
+at your option.
 
 ## Contact ##
 
