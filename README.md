@@ -16,8 +16,10 @@ This version is built with [GSL v. 2.5](https://ftp.sotirov-bg.net/pub/mirrors/g
 ### SCOREC ###
 This version is built with a specific commit of SCOREC and has not been updated and guaranteed to work with the later versions. The commit hash is provided below:
 
+```
 git clone -n https://github.com/SCOREC/core.git
 git checkout c341ecd5bf908369d21cca095b067ce6ef4f4e19
+```
 
 ## License ##
 VDlib is licensed under either of
