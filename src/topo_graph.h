@@ -52,8 +52,6 @@ class vd_Edge_desc {
     int V;
 
   public:
-    // http://stackoverflow.com/questions/1102392/stdmaps-with-user-defined-types-as-key
-
     bool operator<(const vd_Edge_desc& e2)const;
     bool operator==(const vd_Edge_desc& e2)const;
     int source () const;

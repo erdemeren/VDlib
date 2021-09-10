@@ -56,39 +56,6 @@ bool vd_Edge_desc::operator==(const vd_Edge_desc& e2)const {
 }
 
 
-/*
-bool vd_Edge_desc::operator<(const vd_Edge_desc& e2)const {
-  bool u1u2 = (this->U == e2.U);
-  bool u1v2 = (this->U == e2.V);
-  bool v1u2 = (this->V == e2.U);
-  bool v1v2 = (this->V == e2.V);
-  //std::cout << this->U << " - "<< this->V << " vs ";
-  //std::cout << e2.U << " - "<< e2.V << std::endl;
-
-  if (u1u2) {
-    if (v1v2) {
-      //std::cout << "Same edge"<< std::endl;
-      return false;
-    }
-    else {
-      return (this->V < e2.V);
-    }
-  }
-  else if (u1v2) {
-    if (v1u2) {
-      //std::cout << "Same edge rev"<< std::endl;
-      return false;
-    }
-    else {
-      return (this->U < e2.U);
-    }
-  }
-  else {
-    return (this->U < e2.U);
-  }
-}
-*/
-
 int vd_Edge_desc::source () const {
   return U;
 }
@@ -637,48 +604,6 @@ vd_graph::vd_graph() : directed(false), v_id{}, reserve_sz(0),
                       adj_vec(0, std::set<int>{}), adj_map{}, edge_list{} {
 }
 
-// Copy constructor.
-/*
-vd_graph::vd_graph(const vd_graph &obj) : directed(false), v_id(), adj_map(), edge_list() {
-  clear();
-
-  directed = obj.directed;
-
-  std::set<int>::const_iterator id_beg = obj.v_id.begin();
-
-  // Iterate over the adjacency map, copy each vertex adjacency.
-  while (id_beg != obj.v_id.end()) {
-    // *vs_beg is the int vertex id.
-    // Create copies of the vertices on the graphs.
-    add_vertex(*id_beg); 
-
-    //int v_curr(*id_beg);
-    //int v_curr_old(*id_beg);
-
-    //v_curr] = *id_beg;
-
-    // Iterate over the current adjacency list, copy each vertex adjacency.
-    std::set<int>::const_iterator v_beg = obj.adj_map[*id_beg].begin();
-    while (v_beg != obj.adj_map[*id_beg].end()) {
-      adj_map[*id_beg].insert(*v_beg);
-      v_beg++;
-    }
-    id_beg++;
-
-  }
-  // Iterate and over the edge list and copy.
-
-  std::multiset<vd_Edge_desc>::const_iterator e_beg = obj.edge_list.begin();
-
-  // Iterate over the adjacency map, copy each vertex adjacency.
-  while (e_beg != obj.edge_list.end()) {
-    edge_list.insert(*e_beg);
-    e_beg++;
-  }
-
-}
-*/
-
 vd_graph& vd_graph::operator=( vd_graph& obj ) {
   clear();
 
@@ -920,61 +845,6 @@ bool set_edge_comp (std::vector<vd_Edge> e1, std::vector<vd_Edge> e2) {
   return false;
 }
 
-/*
-bool PatonFinder::set_edge_comp (std::vector<vd_Edge> e1, std::vector<vd_Edge> e2) { 
-
-  // This is used to sort edge sets such that the shorter sets will be 
-  // considered "less".
-  if (e1.size() < e2.size()) {
-    return true;
-  }
-  else if (e1.size() > e2.size()) {
-    return false;
-  }
-
-  std::vector<vd_Edge>::iterator it_e1;
-  std::vector<vd_Edge>::iterator it_e2;
-
-  it_e1 = e1.begin(); 
-  it_e2 = e2.begin(); 
-  while (it_e1 != e1.end() and it_e2 != e2.end()) {
-    int u1 = g.source(&*it_e1);
-    int u2 = g.source(&*it_e2);
-    int v1 = g.target(&*it_e1);
-    int v2 = g.target(&*it_e2);
-
-    bool u1u2 = (u1 == u2);
-    bool u1v2 = (u1 == v2);
-    bool v1u2 = (v1 == u2);
-    bool v1v2 = (v1 == v2);
-
-    if ((u1u2 and v1v2) or (u1v2 and v1u2)) {
-      it_e1++;
-      it_e2++;
-    }
-    else {
-      return edge_comp (*it_e1, *it_e2);
-    }
-  }
-  if (it_e1 != e1.end()) {
-    return false;
-  }
-  else if (it_e2 != e2.end()) {
-    return true;
-  }
-
-  return false;
-}
-*/
-
-/*
-void PatonFinder::sort_edge (std::vector<vd_Edge>* edge_list) { 
-  std::sort(edge_list->begin(), edge_list->end(), 
-      std::bind(&PatonFinder::edge_comp, this, 
-      std::placeholders::_1, std::placeholders::_2) );
-}
-*/
-
 void PatonFinder::sort_edge_sets(std::vector<std::vector<vd_Edge> >* e_set, int left, int right) {
   if(right == -1 and left == -1) {
     left = 0;
@@ -989,7 +859,6 @@ void PatonFinder::sort_edge_sets(std::vector<std::vector<vd_Edge> >* e_set, int 
     sort_edge_sets(e_set, part + 1, right);
   }
 }
-//https://en.wikipedia.org/wiki/Quicksort
 //Function to determine the partitions
 // partitions the array and returns the middle subscript
 int PatonFinder::partition_edge_set(std::vector<std::vector<vd_Edge> >* e_set, int left, int right) {
@@ -1007,14 +876,6 @@ int PatonFinder::partition_edge_set(std::vector<std::vector<vd_Edge> >* e_set, i
   std::swap(e_set->at(i+1),e_set->at(right));
   return i + 1;
 }
-
-/*
-void PatonFinder::sort_edge_sets (std::vector<std::vector<vd_Edge> >* e_set) { 
-  std::sort(e_set->begin(), e_set->end(), 
-      std::bind(&PatonFinder::set_edge_comp, this, 
-      std::placeholders::_1, std::placeholders::_2) );
-}
-*/
 
 void PatonFinder::isect_edge (std::vector<vd_Edge>* e1, 
                               std::vector<vd_Edge>* e2, 
@@ -1235,54 +1096,6 @@ void PatonFinder::find_paton() {
 
   }
 
-
-/*
-  while(!intersect.empty()) {
-    //std::cout << "Checking " << *intersect.begin() << std::endl;
-    for (std::tie(ai, ai_end) = g.adjacent_vertices(*intersect.begin()); ai != ai_end; ++ai) {
-      //tree.add_vertex(*intersect.begin());
-
-      //std::cout << "g: " << std::endl;
-      //g.print_adj();
-      //std::cout << "tree: " << std::endl;
-      //tree.print_adj();
-      //std::cout << "Checking: " << *intersect.begin() << " - " << 
-      //                                            *ai << std::endl;
-
-      //std::cout << *ai <<  " ";
-      if (T.find(*ai) == T.end()) {
-        //std::cout << "Not found. " << std::endl;
-
-        T.insert(*ai);
-
-        tree.add_vertex(*ai);
-        tree.add_edge(*intersect.begin(), *ai);
-      }
-      else {
-        //std::cout << "Cycle Found\n" << std::endl;
-        find_nonrecursive(*intersect.begin(), *ai);
-        //std::cout << " " << *intersect.begin() << std::endl;
-
-        //sprintf(integer_string, "output/g_%d.dot", map_nbr);
-        //g.print_graph(integer_string);
-        //map_nbr++;
-
-      }
-      g.remove_edge(*intersect.begin(), *ai);
-      std::cout << "After: g: " << std::endl;
-      g.print_adj();
-      std::cout << "After: tree: " << std::endl;
-      tree.print_adj();
-
-    }
-    //std::cout << std::endl;
-    X.erase(X.find(*intersect.begin()));
-    intersect.clear();
-    set_intersection(X.begin(),X.end(),T.begin(),T.end(),
-              std::inserter(intersect,intersect.begin()));
-
-  }
-*/
   for (int i = 0; i < paths.size(); i++) {
     std::cout << "Cycle " << i << ": ";
     for (int j = 0; j < paths.at(i).size(); ++j) {
@@ -1314,33 +1127,6 @@ void PatonFinder::vert_2_edge() {
     }
     paths_e.at(i).back() = g.get_edge(paths.at(i).at(0), paths.at(i).back());
   }
-/*
-  for (int i = 0; i < paths_e.size(); i++) {
-    for (int j = 0; j < paths.at(i).size()-1; j++) {
-      int n1 = paths.at(i).at(j);
-      int n2 = paths.at(i).at(j+1);
-      if(n1 < 0)
-        n1 = -1;
-      if(n2 < 0)
-        n2 = -1;
-      if(n1 > -1 or n2 > -1)
-        paths_e.at(i).push_back(g.get_edge(n1, n2));
-//        paths_e.at(i).at(j) = g.get_edge(n1, n2);
-//    paths_e.at(i).at(j) = g.get_edge(paths.at(i).at(j), paths.at(i).at(j+1));
-    }
-
-    int n1 = paths.at(i).at(0);
-    int n2 = paths.at(i).back();
-    if(n1 < 0)
-      n1 = -1;
-    if(n2 < 0)
-      n2 = -1;
-
-    if(n1 > -1 or n2 > -1)
-      paths_e.at(i).push_back(g.get_edge(n1, n2));
-//    paths_e.at(i).back() = g.get_edge(paths.at(i).at(0), paths.at(i).back());
-  }
-*/
 
   for (int i = 0; i < paths_e.size(); i++) {
     sort_edge (&paths_e.at(i));
@@ -1547,34 +1333,6 @@ void PatonFinder::create_sub(cell_graph* const c_graph_in) {
                                   circ_tup.at(i).second.second.begin()));
       }
     }
-/*
-      if (id > 0) {
-        circ_tup.at(i).second.first.reserve(g.num_vertices());
-        circ_tup.at(i).second.second.reserve(g.num_vertices());
-
-        // Copy the first disjoint graph patch into the first of the disjoint
-        // graph couple.
-
-        std::copy(disj_frag.at(0).begin(), disj_frag.at(0).end(),
-                   std::inserter(circ_tup.at(i).second.first,
-                                  circ_tup.at(i).second.first.begin()));
-
-        for (int j = 1; j < id; j++) {
-          if(chk_conn_list(&circ_tup.at(i).second.first, &disj_frag.at(j)) ) {
-            std::copy(disj_frag.at(j).begin(), disj_frag.at(j).end(),
-             std::inserter(circ_tup.at(i).second.first,
-                            circ_tup.at(i).second.first.end()));
-          }
-          else {
-            std::copy(disj_frag.at(j).begin(), disj_frag.at(j).end(),
-             std::inserter(circ_tup.at(i).second.second,
-                            circ_tup.at(i).second.second.end()));
-          }
-        }
-
-      }
-    }
-*/
     // Reload the graph for the next path.
     g = *g_init;
   }
@@ -2070,13 +1828,6 @@ bool cell_graph::comp_conn_12(int c21, int c22) {
   return false;
 }
 
-/*
-void cell_graph::clear_ext_map() {
-  ext_2c.clear();
-  ext_path.clear();
-}
-*/
-
 // Treat the ciruits and paths for graphs containing multiple exterior cells.
 void cell_graph::treat_circuits() {
   //vd_Edge_desc null_edge(-1,-1);
@@ -2476,53 +2227,6 @@ void cell_graph::find_circuits() {
 
 }
 
-// Going over the exterior 2cells, group 2cells separated by corner 1cells.
-// For possible 2cell insertions, if one of the exterior 3cell couples is the 
-// exterior, associate paths based on the group of the exterior 2cells on the 
-// path.
-// For paths starting on the exterior, each path will have exactly a single 
-// 2cell on it. Paths associated with the same 2cell group cannot be used 
-// together.
-/*
-void cell_graph::find_ext_nonintsct() {
-  assert(cb->get_0c_corner(cell_ctr));
-
-  // Topo tags
-  struct ent_conn e1;
-  for(int i = 0; i < cells2.conn.size(); i++) {
-    int adj_count = 0;
-    cb->get_conn(2, cells2.conn.at(i), &e1);
-    for(int j = 0; j < e1.conn.size(); j++) {
-      if(get_conn_0(cell_ctr, 1, e1.conn.at(j) and 
-                        cb->get_1c_corner(e1.conn.at(j))) {
-        
-        adj_count++;
-      }
-      if(adj_count == 2)
-        j = e1.conn.size();
-    }
-  }
-  cells1
-    std::map< int, bool > ext_1c;
-    // Corner 1cell 1st exterior 2cell neigbor
-    std::map< int, int > ext_1c1;
-    // Corner 1cell 2nd exterior 2cell neigbor
-    std::map< int, int > ext_1c2;
-    // Ext 2cell flag
-    std::map< int, bool > ext_2c;
-    // Ext 2cell part tag
-    std::map< int, int > ext_2c_part;
-    // Path exterior flag
-    std::map< int, int > ext_path;
-
-
-  ext_2c;
-  ext_path;
-
-path_act
-
-}
-*/
 // Set the non-intersecting lists of all paths.
 void cell_graph::find_nonintsct() {
   // Reserve the non-intersecting lists.
@@ -2672,24 +2376,6 @@ int cell_graph::get_circ_type(int c_in) {
   return 0;
 }
 
-/*
-// The elements of the input list of 1cells that are adjacent to the 0cell are
-// kept. The others are removed.
-bool cell_graph::chk_1cell_adj(struct ent_conn* e_in) {
-
-  for (int k = e_in->conn.size()-1; k > 0; k--) {
-    //std::cout << e_in->conn.at(k) << " ";
-    if (!cells1.chk_ent(e_in->conn.at(k))) {
-      for (int j = k; j < e_in->conn.size()-1; j++) {
-        e_in->conn.at(j) = e_in->conn[j+1]; 
-      }
-      e_in->conn.size()--;
-    }
-  }
-  return (e_in->conn.size() > 0);
-}
-*/
-
 // Check if the current path has reached the end 3cell. If so, add it to the 
 // path list.
 bool cell_graph::try_path() {
@@ -2833,72 +2519,6 @@ void cell_graph::trace_path() {
           c3_curr = c3_temp;
         }
         path_remove();
-/*
-        if (path_curr.size() == 1) {
-          //std::cout << "Adding the first 2cell" << std::endl;
-          // Add the first 2cell and the following 3cell.
-
-          // The length of path_curr is 3, so this configures the cell1_act
-          // for a single 2cell.
-          // TODO chk_1cell does nothing here, except for clearing.
-          //chk_1cell();
-          //cell1_act.reserve(econ1.conn.size());
-          path_append();
-          trace_path();
-          c2_curr = *ai_st;
-          c3_curr = c3_temp;
-
-          path_remove();
-
-          // Reload the cell1_act.
-          // TODO chk_1cell does nothing here, except for clearing.
-          //chk_1cell();
-        }
-
-        // Determine what type of path loop the current candidate path is.
-        // (Ocell or 1cell loop)
-        else if (path_curr.size() == 3) {
-
-          path_append();
-          // The length of path_curr is 3, so this configures the cell1_act
-          // for a single 2cell.
-          //chk_1cell();
-
-          // Add to the path.
-          if(try_path()) {
-          }
-          else {
-            trace_path();
-            c2_curr = *ai_st;
-            c3_curr = c3_temp;
-          }
-          path_remove();
-          // Reload the cell1_act.
-          //chk_1cell();
-
-          //std::cout << "(path_type is " << cell1_flag << " )";
-        } //else if path_curr size == 3 ends
-
-        else {
-          assert(path_curr.size() > 3);
-          path_append();
-          // The length of path_curr is 3, so this configures the 
-          // cell1_act for a single 2cell.
-          //chk_1cell();
-
-          // Add to the path.
-          if(try_path()) {
-          }
-          else {
-            trace_path();
-            c2_curr = *ai_st;
-            c3_curr = c3_temp;
-          }
-          path_remove();
-          // Reload the cell1_act.
-          //chk_1cell();
-        } // if path_curr size ends
-*/
         //std::cout << "\\2c" << c2_id+1 << "\\3c" 
         //          << c3_id+1 << ", ";
       } // If 3cell not visited check. 
@@ -4205,19 +3825,14 @@ bool cell_graph::circ_tup_comp_disj (const crc& circ_1, const crc& circ_2) {
 
 // Quick Sort Functions for Ascending Order 
 // (2 Functions) 
-//http://codereview.stackexchange.com/questions/77782/quick-sort-implementation
-
 void cell_graph::quicksort_circ_tup(int left, int right) {
   // left > right
   if (left < right) {
     int part = partition(left, right);
-    //std::cout << "QSC:" << left << "," << right << " part=" << part << "\n";
-    //print (arr, sz);
     quicksort_circ_tup(left, part - 1);
     quicksort_circ_tup(part + 1, right);
   }
 }
-//https://en.wikipedia.org/wiki/Quicksort
 //Function to determine the partitions
 // partitions the array and returns the middle subscript
 int cell_graph::partition(int left, int right) {
@@ -4227,32 +3842,14 @@ int cell_graph::partition(int left, int right) {
   int j = left;
   for (; j < right; j++) {
     if(!circ_tup_comp(pivot, circ_tup.at(j))) {
-      //std::cout << "j: " << i << std::endl;
       i++;
-      //std::cout << "before " << std::endl;
-      //std::cout << circ_tup_comp(pivot, circ_tup.at(i)) << std::endl;
-      //std::cout << circ_tup_comp(circ_tup.at(j), pivot) << std::endl;
       std::swap(circ_tup.at(i), circ_tup.at(j));
-      //std::cout << "swapped " << std::endl;
-      //std::cout << circ_tup_comp(pivot, circ_tup.at(i)) << std::endl;
-      //std::cout << circ_tup_comp(circ_tup.at(j), pivot) << std::endl;
     }
   }
   std::swap(circ_tup.at(i+1),circ_tup.at(right));
-  //std::cout << "swapped " << i+1 << " " << right << std::endl;
   return i + 1;
 }
 
-/*
-void cell_graph::sort_circ_tup (std::vector< std::pair< std::vector<vd_Edge>, s_graph > >* circ_tup_list) {
-  print_circ();
-  //std::cout << "circ_tup begin-end " << std::endl;
-  //std::cout << circ_tup_list->begin() << " " << circ_tup_list->end() << std::endl;
-  std::sort(circ_tup_list->begin(), circ_tup_list->end(), 
-      std::bind(&cell_graph::circ_tup_comp, this, 
-      std::placeholders::_1, std::placeholders::_2) );
-}
-*/
 // Circuit classification based on the cell dimensions on the disjoint graphs
 // generated by removing the circuit from the cell complex.
 // crc_both_3: Both disjoint graphs contain at least a 3cell.
@@ -4949,19 +4546,6 @@ void cell_ins_chk::find_slice(path_adder* pa) {
   path_cells.resize(ng.ngons.at(ng_id).size());
   for(int i = 0; i < ng.ngons.at(ng_id).size(); i++ ) {
     int path_id = ng.ngons.at(ng_id).at(i);
-/*
-    std::cout << "path_id " << path_id << std::endl;
-
-    for(int j = 0; j < ng.cells.at(path_id).first.size(); j++ ) {
-      std::cout << "3c" << ng.cells.at(path_id).first.at(j) 
-                << " " << std::endl;
-    }
-
-    for(int j = 0; j < ng.cells.at(path_id).second.size(); j++ ) {
-      std::cout << "2c" << ng.cells.at(path_id).second.at(j) 
-                << " " << std::endl;
-    }
-*/
 
     //c_base id
     // 3c
@@ -5196,21 +4780,6 @@ void cell_ins_chk::repl_index(int dim, int c0, std::vector<int>* c_in) {
   }
 }
 
-// Return the 0cells around which new cells can be inserted. Quick way of 
-// correcting the starting microstructure for the isotropic case.
-/*
-std::vector<int> cell_ins_chk::ret_ins() {
-  std::vector<int> cell_ins;
-  cell_ins.reserve(cells3.size());
-
-  for(int i = 0; i < cells3.size(); i++) {
-    if(cells3.at(i).conn.size() > 4)
-      cell_ins.push_back(i);
-  }
-  return cell_ins;
-}
-*/
-
 std::vector<int> cell_ins_chk::ret_ins_gmi() {
   std::vector<int> cell_ins(0);
   cell_ins.reserve(cells3.size());
@@ -5291,28 +4860,6 @@ std::vector<int> cell_ins_chk::ret_ins_gmi() {
 
   return cell_ins;
 }
-/*
-        ent_conn e_1c;
-
-        std::cout << "2c" << cells2.at(i).conn.at(j) + 1 << ": " << std::endl;
-        cb->get_conn(2, cells2.at(i).conn.at(j), &e_1c);
-        for(int k = 0; k < e_1c.conn.size(); k++) {
-          std::cout << "1c"<< e_1c.conn.at(k) + 1 << " ";
-        }
-        std::cout << std::endl;
-
-        cb->rem_conn(0, i, 1, &e_1c);
-        for(int k = 0; k < e_1c.conn.size(); k++) {
-          std::cout << "1c" << e_1c.conn.at(k) + 1 << " ";
-        }
-        std::cout << std::endl;
-
-        if(e_1c.conn.size() > 2) {
-          std::cout << "Bounded by more than 2 1-cells" << std::endl;
-          cell_ins.push_back(i+1);
-        }
-        else {
-*/
 
 bool cell_ins_chk::insertible(int tag_0cell, bool isotropic) {
   if (isotropic) {

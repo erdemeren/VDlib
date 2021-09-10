@@ -60,7 +60,6 @@ void sort_celem(std::vector<c_elem>* c_set, int left, int right) {
     sort_celem(c_set, part + 1, right);
   }
 }
-//https://en.wikipedia.org/wiki/Quicksort
 //Function to determine the partitions
 // partitions the array and returns the middle subscript
 int partition_celem(std::vector<c_elem>* c_set, int left, int right) {
@@ -131,11 +130,7 @@ bool ent_conn::repl_tag(int tag_new, int tag_old) {
   return false;
 }
 
-// Quick Sort Functions for Ascending Order. TODO This is a buggy implementation!
-// (2 Functions) 
-//http://codereview.stackexchange.com/questions/77782/quick-sort-implementation
-
-
+// Quick Sort Functions for Ascending Order.
 void ent_conn::quicksort(int left, int right) {
   if(right == -1 and left == -1) {
     left = 0;
@@ -169,31 +164,6 @@ int ent_conn::partition(int left, int right) {
   conn.at(i+1) = temp;
   return i + 1;
 }
-
-// Merge another connection list into this list. Assumes the second list 
-// contains only unique elements. 
-//int ent_conn::merge(struct ent_conn* e_conn2)
-//{
-//  if (conn.size() + ent_conn2->conn.size() < n) {
-//    quicksort(0,conn.size());
-//    e_conn2->quicksort(0,e_conn2->conn.size());
-//    for (int i = 0; i < ent_conn2->conn.size(); i++) {
-//     if chk_ent(ent_conn2->conn.at(i)) {
-//        rem_ent(ent_conn2->conn.at(i);
-//      }
-//    }
-//
-//    for (int i = 0; i < ent_conn2->conn.size(); i++) {
-//      if chk_ent(ent_conn2->conn.at(i)) {
-//        rem_ent(ent_conn2->conn.at(i);
-//      }
-//    }
-//    
-//  }
-//  else {
-//    printf("Container size too small.\n");
-//  }
-//}
 
 int ent_conn::chk_intsct(ent_conn* e2, ent_conn* intsct) {
   std::vector<int>::iterator it;
@@ -2971,8 +2941,6 @@ void cell_base::vd_write_dmg(const char* filename) {
   }
   /* faces */
   for (int j = 0; j < n[2]; j++) {
-    /* from gmi_write_dmg: we're going to cheat a bit here and
-       treat all edges as one giant loop */
     fprintf(f, "%d 1\n", j+1);
     get_conn(2, j, &e_con);
 

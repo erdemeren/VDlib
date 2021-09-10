@@ -6321,7 +6321,7 @@ void vd_sim::set_time(std::vector<std::string>& opts) {
   std::vector<std::string> out(0, std::string(""));
   std::string delim("::");
   for(int i = 0; i < opts.size(); i++) {
-    tokenize(opts.at(i), delim, out);
+    split_str_delim(opts.at(i), delim, out);
     assert(out.size() == 2);
     if(out.at(0) == "TIME_START") {
       time_curr = std::stod(out.at(1));
@@ -6433,7 +6433,7 @@ void vd_sim::set_equations(std::vector<std::string>& opts) {
   std::vector<std::string> out(0, std::string(""));
   std::string delim("::");
   for(int i = 0; i < opts.size(); i++) {
-    tokenize(opts.at(i), delim, out);
+    split_str_delim(opts.at(i), delim, out);
     assert(out.size() == 2);
     if(out.at(0) == "VEL_TYPE") {
       set_field_calc(conv_str2vel(out.at(1)));

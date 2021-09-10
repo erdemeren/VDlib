@@ -16,7 +16,6 @@
 
 #include "topo_extinfo.h"
 #include "topo_topo.h"
-#include "topo_pca.h"
 #include "topo_entlist.h"
 
 #define PI_L std::acos(-1.)  /* pi */
@@ -56,14 +55,10 @@ double vd_meas_rad_set(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev);
 double vd_meas_rad_set_min(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev);
 
 // Given a set of entities, return the minimum radius of the containing sphere 
-// positioned at the center. Also, assuming an ellipsoid shape, check for the 
-// minimum axis in the following manner. Get the position of minimum distance 
+// positioned at the center. Get the position of minimum distance 
 // from the center. Get the second position, that is twice that distance from 
 // the first position and is minimum among these.
 std::pair<double, double> vd_meas_rad_set_minmax(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev);
-
-ellipsoid vd_meas_rad_set_minmax(apf::Mesh2* m, int c_dim, int c_id);
-ellipsoid vd_meas_rad_set_minmax(apf::Mesh2* m, vd_entlist* e_list, int c_dim, int c_id);
 
 // Given a set of entities, return the total length, area or volume.
 double vd_meas_set(apf::Mesh2* m, std::vector<apf::MeshEntity*>* es_in);

@@ -5,7 +5,6 @@
 
 #include "topo_write.h"
 
-//https://techoverflow.net/2013/08/21/how-to-check-if-file-exists-using-stat/
 bool fileExists(const char* file) {
     struct stat buf;
     return (stat(file, &buf) == 0);
@@ -65,29 +64,41 @@ std::string insert_between(std::string& f, std::string& r_exp, std::string &ins)
   return rep;
 }
 
-// https://www.programmersought.com/article/51335523020/
+// Count non-overlapping occurances of a substring.
 int count_nonoverlapping_sub(const std::string& str, const std::string& sub) {
-	int num = 0;
-	size_t len = sub.length();
-	if (len == 0)len=1;//To deal with empty substring calls
-	for (size_t i=0; (i=str.find(sub,i)) != std::string::npos; num++, i+=len);
-	return num;
+  int count = 0;
+  int sz = sub.size();
+  size_t i = 0;
+  if(sz == 0)
+    return 0;
+  while(i != std::string::npos) {
+    i = str.find(sub, i);
+    if(i != std::string::npos) {
+      count = count + 1;
+      i = i + sz;
+    }
+  }
+	return count;
 }
 
-// https://www.techiedelight.com/split-string-cpp-using-delimiter/
-void tokenize(std::string const &str, std::string& delim,
+void split_str_delim(std::string const &str, std::string& delim,
             std::vector<std::string> &out) {
-  size_t start;
+
+  size_t start = 0;
   size_t end = 0;
 
   int sz = count_nonoverlapping_sub(str, delim);
   out.clear();
   out.reserve(sz+1);
-
-  while ((start = str.find_first_not_of(delim.c_str(), end)) 
-                                                != std::string::npos) {
-    end = str.find(delim.c_str(), start);
-    out.push_back(str.substr(start, end - start));
+  if(sz == 0)
+    return;
+  while(start != std::string::npos) {
+    start = str.find_first_not_of(delim, start);
+    if(start != std::string::npos) {
+      end = str.find(delim, start);
+      out.push_back(str.substr(start, end - start));
+      start = end;
+    }
   }
 }
 
@@ -109,7 +120,6 @@ void file_list::sort_nbrs(int left, int right) {
     sort_nbrs(part + 1, right);
   }
 }
-//https://en.wikipedia.org/wiki/Quicksort
 //Function to determine the partitions
 // partitions the array and returns the middle subscript
 int file_list::partition_nbrs(int left, int right) {
@@ -245,8 +255,6 @@ void gmi_write_tess(struct gmi_model* m, const char* filename)
   /* faces */
   it = gmi_begin(m, 2);
   while ((e = gmi_next(m, it))) {
-    /* we're going to cheat a bit here and
-       treat all edges as one giant loop */
     fprintf(f, "%d 1\n", gmi_tag(m, e));
     s = gmi_adjacent(m, e, 1);
     fprintf(f, "%d\n", s->n);
@@ -258,7 +266,6 @@ void gmi_write_tess(struct gmi_model* m, const char* filename)
   /* regions */
   it = gmi_begin(m, 3);
   while ((e = gmi_next(m, it))) {
-    /* same sort of cheat, all faces are one shell */
     fprintf(f, "%d 1\n", gmi_tag(m, e));
     s = gmi_adjacent(m, e, 2);
     fprintf(f, "%d\n", s->n);
@@ -270,105 +277,65 @@ void gmi_write_tess(struct gmi_model* m, const char* filename)
   fclose(f);
 }
 
-// Taken from
-//http://www.cplusplus.com/forum/beginner/182904/
-
 void ReadNumbers(const std::string& filename, char sep, 
-                             std::vector<std::vector<int> > & output)
-{
+                             std::vector<std::vector<int> > & output) {
   std::ifstream src(filename);
+  std::string delim(&sep);
+  std::vector<std::string> temp(0, std::string(""));
 
-  if (!src)
-  {
+  if (!src) {
     std::cerr << "\aError opening file.\n\n";
     exit(EXIT_FAILURE);
   }
   std::string buffer("");
-  while(std::getline(src, buffer))
-  {
+  while(std::getline(src, buffer)) {
     std::vector<int> v_curr(0);
-    size_t strpos = 0;
-    size_t endpos;
-    endpos = buffer.find(sep);
-    while (endpos != std::string::npos) {
-      v_curr.push_back(std::stoi(buffer.substr(strpos,endpos - strpos)));
-      strpos = endpos + 1;
-      endpos = buffer.find(sep, strpos);
+    split_str_delim(buffer, delim, temp);
+    v_curr.resize(temp.size());
+    for(int i = 0; i < temp.size(); i++) {
+      v_curr.at(i) = std::stoi(temp.at(i));
     }
-    //std::cout << buffer.substr(strpos,buffer.length() - strpos) << std::endl;
-    v_curr.push_back(std::stoi(buffer.substr(strpos,
-                                          buffer.length() - strpos)));
     output.push_back(v_curr);
   }
 }
 
-void ReadNumbers(const std::string& filename, char sep, 
-                          std::vector<std::vector<double > > & output)
-{
-  std::ifstream src(filename);
 
-  if (!src)
-  {
+void ReadNumbers(const std::string& filename, char sep, 
+                             std::vector<std::vector<double> > & output) {
+  std::ifstream src(filename);
+  std::string delim(&sep);
+  std::vector<std::string> temp(0, std::string(""));
+
+  if (!src) {
     std::cerr << "\aError opening file.\n\n";
     exit(EXIT_FAILURE);
   }
   std::string buffer("");
-  while(std::getline(src, buffer))
-  {
-    std::vector<double > v_curr(0);
-    size_t strpos = 0;
-    size_t endpos;
-    endpos = buffer.find(sep);
-    while (endpos != std::string::npos) {
-      v_curr.push_back(std::stod(buffer.substr(strpos,endpos - strpos)));
-      strpos = endpos + 1;
-      endpos = buffer.find(sep, strpos);
+  while(std::getline(src, buffer)) {
+    std::vector<double> v_curr(0);
+    split_str_delim(buffer, delim, temp);
+    v_curr.resize(temp.size());
+    for(int i = 0; i < temp.size(); i++) {
+      v_curr.at(i) = std::stod(temp.at(i));
     }
-    //std::cout << buffer.substr(strpos,buffer.length() - strpos) << std::endl;
-    v_curr.push_back(std::stod(buffer.substr(strpos,
-                                          buffer.length() - strpos)));
     output.push_back(v_curr);
   }
 }
 
-// Read lines from filename, and add the lines separated by sep into the output.
-void ReadNames(const std::string& filename, const char * sep, 
+
+void ReadNames(const std::string& filename, char sep, 
                              std::vector<std::vector<std::string> > & output) {
   std::ifstream src(filename);
+  std::string delim(&sep);
+  std::vector<std::string> temp(0, std::string(""));
 
-  if (!src)
-  {
-    std::cout << filename << std::endl;
+  if (!src) {
     std::cerr << "\aError opening file.\n\n";
     exit(EXIT_FAILURE);
   }
-  for(int i = 0; i < output.size(); i++)
-    output.at(i).clear();
-  output.clear();
-
   std::string buffer("");
-
-  int count = 0;
   while(std::getline(src, buffer)) {
-    count = count + 1;
-  }
-  src.clear(); //< Now we can read again
-  std::ifstream src2(filename);
-
-  output.reserve(count);
-
-  std::vector<std::string> temp(0);
-  while(std::getline(src2, buffer)) {
-    temp.clear();
-    size_t strpos = 0;
-    size_t endpos;
-    endpos = buffer.find(sep);
-    while (endpos != std::string::npos) {
-      temp.push_back(buffer.substr(strpos,endpos - strpos));
-      strpos = endpos + 1;
-      endpos = buffer.find(sep, strpos);
-    }
-    //temp.push_back(buffer.substr(strpos, buffer.length() - strpos));
+    split_str_delim(buffer, delim, temp);
     output.push_back(temp);
   }
 }

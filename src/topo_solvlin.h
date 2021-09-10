@@ -21,40 +21,7 @@
 #include <apfNumbering.h>
 #include <apfShape.h>
 
-#include "topo_pca.h"
 #include "topo_disp.h"
-
-// https://www.gnu.org/software/gsl/doc/html/splinalg.html
-
-// Container for the gsl based linear solver:
-class solv_lin {
-  private:
-    solv_lin(const solv_lin &obj);
-    solv_lin& operator=( const solv_lin& obj );
-  public:
-    int n;
-    apf::Mesh2* m;
-
-    gsl_spmatrix* A;
-    gsl_spmatrix* C;
-    gsl_vector *f;
-    gsl_vector *u;
-
-    apf::GlobalNumbering* gn;
-
-    // Functions:
-    void numb_vert();
-    void dest_numb();
-    void collect_matrix(apf::Mesh2* m_in);
-    void init(apf::Mesh2* m_in);
-    void clear();
-    double solve(const double tol);
-
-    solv_lin(apf::Mesh2* m);
-    ~solv_lin();
-    friend std::ostream& operator<<(std::ostream& s, const solv_lin& sl);
-
-};
 
 // Container for the gsl based linear solver:
 class solv_kuprat {

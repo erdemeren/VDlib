@@ -113,8 +113,6 @@ class ent_conn {
     bool repl_tag(int tag_new, int tag_old);
 
     // Quick Sort Functions for Ascending Order 
-    // (2 Functions) 
-    //http://codereview.stackexchange.com/questions/77782/quick-sort-implementation
     void quicksort(int left = -1, int right = -1);
     //Function to determine the partitions
     // partitions the array and returns the middle subscript

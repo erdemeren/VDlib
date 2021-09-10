@@ -3,15 +3,11 @@
 
 #include <iostream>
 #include <fstream>
-
-// Regular expression http://www.cplusplus.com/reference/regex/regex_replace/
 #include <string>
 #include <regex>
 #include <iterator>
 
 #include <sys/stat.h>
-
-// Directory related part adapted from https://stackoverflow.com/questions/612097/how-can-i-get-the-list-of-files-in-a-directory-using-c-or-c
 #include <stdio.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -33,7 +29,7 @@ std::string replace_part(std::string & f, std::string& r_exp);
 // Insert suffix between matched string and the part before the matched string.
 std::string insert_between(std::string& f, std::string& r_exp, std::string &ins);
 
-void tokenize(std::string const &str, std::string& delim,
+void split_str_delim(std::string const &str, std::string& delim,
             std::vector<std::string> &out);
 
 class file_list {
@@ -60,7 +56,31 @@ class file_list {
 // Write a tess file:
 void gmi_write_tess(struct gmi_model* m, const char* filename);
 
-// Taken from https://stackoverflow.com/questions/25201131/writing-csv-files-from-c
+
+void ReadNumbers(const std::string& filename, char sep, 
+                 std::vector<std::vector<int> > & output);
+
+void ReadNumbers(const std::string& filename, char sep, 
+                 std::vector<std::vector<double> > & output);
+
+// Read lines from filename, and add the lines separated by sep into the output.
+void ReadNames(const std::string& filename, const char * sep, 
+                             std::vector<std::vector<std::string> > & output);
+
+// csvfile object:
+// Taken from https://gist.github.com/rudolfovich/f250900f1a833e715260a66c87369d15
+// Copyright 2021 Vladimir Shestakov
+
+// Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+// 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+// 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  Vladimir Shestakov 
+
 class csvfile;
 
 inline static csvfile& endrow(csvfile& file);
@@ -134,15 +154,5 @@ inline static csvfile& flush(csvfile& file)
     return file;
 }
 
-
-void ReadNumbers(const std::string& filename, char sep, 
-                 std::vector<std::vector<int> > & output);
-
-void ReadNumbers(const std::string& filename, char sep, 
-                 std::vector<std::vector<double> > & output);
-
-// Read lines from filename, and add the lines separated by sep into the output.
-void ReadNames(const std::string& filename, const char * sep, 
-                             std::vector<std::vector<std::string> > & output);
 
 #endif
