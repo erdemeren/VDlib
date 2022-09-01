@@ -10,9 +10,9 @@ This version is built with [OpenMPI v. 3.1.2](https://download.open-mpi.org/rele
 This version is built with [GSL v. 2.5](https://ftp.sotirov-bg.net/pub/mirrors/gnu/gsl/gsl-2.5.tar.gz).
 
 To modify the dynamic linker configuration run the following in the terminal before running a program using GSL, or add it to the .bashrc:
-"""
+```
 export LD_LIBRARY_PATH=/directory/gsl/lib:LD_LIBRARY_PATH
-"""
+```
 
 ### SCOREC ###
 This version is built with a specific commit of SCOREC and has not been updated for and is not guaranteed to work with the later versions. Please follow the respective installation instructions in [README_SCOREC](README_SCOREC.md).
