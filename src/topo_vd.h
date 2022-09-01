@@ -83,6 +83,14 @@ class vd_sim{
     bool load_flag;
     bool save_mov;
 
+    bool ed_verb_flag;
+
+    // Controls whether sub vtk files are generated or not. 
+    // This doesn't prevent snapshot generation. dt_vtk_period controls  
+    // snapshot generation and save_mov controls whether individiual grain 
+    // snapshots are generated.
+    bool sub_vtk;
+
     // Loading a geometry and mesh for the first time. Used to distinguish 
     // between reloading just the mesh and loading a new model and mesh.
     bool first_time;
@@ -323,6 +331,9 @@ class vd_sim{
 
     bool chk_vert_val(apf::MeshEntity* vert);
 
+    void set_glens_param(vd_glens& g_lens);
+    void set_glens_trial_param(vd_glens_trial& g_trial, bool precond_flag);
+
     // TODO make it private
     // Topology organizers; functions that collect all the objects of 
     // different modules that must be handled together:
@@ -343,6 +354,7 @@ class vd_sim{
 
     // Try inserting cells around the given 0cell. Currently only inserts 1cell.
     bool ins_cell(int tag_0cell);
+    void set_edisc_param(vd_edisc* e_d);
 
     // ma::adapt() sometimes crashes due to non-existing cavities. Check if this
     // results from ma processes or insertion or collapses on our end.
@@ -390,7 +402,8 @@ class vd_sim{
     void check_model();
     void reload_mesh();
 
-    bool comp_mesh_topo();
+    // Print the model object. 
+    void print_mesh_topo();
 
     // Set the vtk save interval parameters and check if enough time has passed
     // for automatic vtk saving.
@@ -428,6 +441,7 @@ class vd_sim{
 
     void adapt_mark_0c_col(int d_col, int t_col);
     void adapt_mark_0c_min();
+    void adapt_mark_curv();
     void adapt_mark_bound_min();
 
     // Based on the normal distance from the 2strata, tag each vertex.
@@ -459,6 +473,12 @@ std::vector<double> &dist_c3);
     double get_adapt_ln();
 
     void fix_low_q(); 
+
+    // TODO Try to improve quality by only tetrahedron splits.
+    void get_low_q_verts(std::vector<apf::MeshEntity*>& tets,
+                             std::vector<apf::MeshEntity*>& verts);
+    void fix_low_q_split_tet();
+
     // Given a cell, coarsen the edges emanating from bounding vertices within a
     // sphere with a radius twice the equivalent radius of the given cell. 
     void adapt_coarsen_cell(int cell_dim, int cell_id);
@@ -471,6 +491,8 @@ std::vector<double> &dist_c3);
     void adapt_prob_edge_all(std::vector<apf::MeshEntity*> &tet);
     void adapt_prob_edge_low(std::vector<apf::MeshEntity*> &tet);
 
+    // Improve quality by collapsing.
+    void adapt_prob_edge_sp_col(std::vector<apf::MeshEntity*> &tet);
     void adapt_prob_edge_sp_bound(std::vector<apf::MeshEntity*> &tet);
 
     // How many times to hit bound_manual before running the meshadapt fix for
@@ -497,11 +519,20 @@ std::vector<double> &dist_c3);
     // Clean all objects in the heap.
     void clean_up();
 
-    bool set_free_cells();
+    void set_free_cells();
 
     void get_v2move(std::vector<apf::MeshEntity*>& v_2move);
     void set_c2move(std::vector<std::pair<int, int> >& c_2move_in, 
                                                   bool f_v2move_in);
+
+    // ADAPT_TYPE::X; ad_flag; ad_len; ad_param; additional_opt1; additional_opt2;
+    // Examples:
+    // ADAPT_STEP_1CELL; 1; 1.; 1.; 0; 0; 0;
+    // ADAPT_STEP_1CELL; 0; 1.; 1.; 0; 1.; 0;
+    // ADAPT_BOUND; 0; 1.; 1.; ./mshfiles/ref_list.txt; 1.; ./mshfiles/move_list.txt;
+    void set_adapt_file(std::string ad_opts);
+    void set_adapt_opts(std::vector<std::string>& opts);
+
     // Refine mesh.
     void ref_mesh_iso(double len);
 
@@ -534,7 +565,7 @@ std::vector<double> &dist_c3);
     //bool chk_cell_shr_rad(int d, int cell_id);
 
     // Used with adaptation scheme ADAPT::ADAPT_BOUND. These cells are refined 
-    bool set_adapt_bound_cells(double ratio, 
+    void set_adapt_bound_cells(double ratio, 
                                std::vector<std::pair<int, int> > &cells_ref_in);
 
     // Change the simulation parameters.
@@ -637,6 +668,10 @@ std::vector<double> &dist_c3);
     // each 3cell should be saved seperately. This flags controls whether they
     // are seperately saved or not.
     void set_mov_flag(bool mov_flag);
+
+    // Set vtk output flag for saving the snapshots generated during 
+    // subprocesses.
+    void set_sub_vtk_flag(bool vtk_flag);
 
 };
 

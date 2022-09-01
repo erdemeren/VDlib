@@ -240,7 +240,6 @@ void cell_adder::add_cell(int dim, int tag, std::vector<int>* new_con,
 }
 
 void cell_adder::clear() {
-  dummy_clear_stop();
   for(int i = 0; i < e_new_id.size(); i++) {
     e_new_id.at(i).clear();
   }
@@ -854,6 +853,7 @@ bool cell_base::set_conn(int dim, int tag, struct ent_conn* e_con) {
     set_conn_up(dim - 1, id_curr, e_up);
   }
   delete e_up;
+  return true;
 }
 
 bool cell_base::set_conn_repl(int dim, int tag_new, int tag_old, struct ent_conn* e_con) {
@@ -874,6 +874,7 @@ bool cell_base::set_conn_repl(int dim, int tag_new, int tag_old, struct ent_conn
     set_conn_up(dim - 1, id_curr, e_up);
   }
   delete e_up;
+  return true;
 }
 
 bool cell_base::set_conn_up(int dim, int tag, struct ent_conn* e_con) {
@@ -881,6 +882,7 @@ bool cell_base::set_conn_up(int dim, int tag, struct ent_conn* e_con) {
   if (dim > 2 or dim < 0 or tag > n[dim])
     return false;
   con_up.at(dim).at(tag) = e_con->conn;
+  return true;
 }
 
 // Get the connection list of a given entity. 
@@ -913,17 +915,19 @@ bool cell_base::get_conn_up(int dim, int tag, struct ent_conn* e_con) {
 bool cell_base::set_conn_gmi(int dim, int tag, struct ent_conn* e_con) {
   for (int i = 0; i < e_con->conn.size(); i++)
     e_con->conn.at(i) = e_con->conn.at(i) - 1;
-  set_conn(dim, tag-1, e_con);
+  bool r_flag = set_conn(dim, tag-1, e_con);
   for (int i = 0; i < e_con->conn.size(); i++)
     e_con->conn.at(i) = e_con->conn.at(i) + 1;
+  return r_flag;
 }
 
 bool cell_base::set_conn_up_gmi(int dim, int tag, struct ent_conn* e_con) {
   for (int i = 0; i < e_con->conn.size(); i++)
     e_con->conn.at(i) = e_con->conn.at(i) - 1;
-  set_conn_up(dim, tag-1, e_con);
+  bool r_flag = set_conn_up(dim, tag-1, e_con);
   for (int i = 0; i < e_con->conn.size(); i++)
     e_con->conn.at(i) = e_con->conn.at(i) + 1;
+  return r_flag;
 }
 
 bool cell_base::get_conn_gmi(int dim, int tag, struct ent_conn* e_con) {
@@ -1154,7 +1158,7 @@ bool cell_base::get_conn_dim_gmi(int dim_adj, int dim, int tag,
 // This can be used during 0/3cell detachment, to obtain the 1cells connected 
 // to the new 0cell and those connected to the old 0cell.
 
-bool cell_base::get_conn_13(int cell0, int cell3, 
+void cell_base::get_conn_13(int cell0, int cell3, 
                                                 struct ent_conn* e_adj,
                                                 struct ent_conn* e_not) {
 
@@ -1189,10 +1193,9 @@ bool cell_base::get_conn_13(int cell0, int cell3,
       }
     }
   }
-
 }
 
-bool cell_base::get_conn_12(int cell0, int cell2, struct ent_conn* e_adj) {
+void cell_base::get_conn_12(int cell0, int cell2, struct ent_conn* e_adj) {
 
   e_adj->clear(); 
 
@@ -1251,20 +1254,22 @@ bool cell_base::chk_conn_d(int c_dim1, int c_id1, int c_dim2, int c_id2) {
   }
 
   struct ent_conn e_cc;
-
+  // c_dim2 is always larger than c_dim1.
   if(c_dim2 - c_dim1 == 1) {
     get_conn(c_dim2, c_id2, &e_cc);
     return e_cc.chk_ent(c_id1);
   }
 
   else {
-    struct ent_conn e_sub;
-    get_conn(c_dim2, c_id2, &e_cc);
-    for (int j = 0; j < e_cc.conn.size(); j++) {
-      if(chk_conn_d(c_dim1, c_id1, c_dim2-1, e_cc.conn.at(j)) )
-        return true;
-    }
-    return false;
+    get_conn_dim(c_dim1, c_dim2, c_id2, &e_cc);
+    return e_cc.chk_ent(c_id1);
+
+    //get_conn(c_dim2, c_id2, &e_cc);
+    //for (int j = 0; j < e_cc.conn.size(); j++) {
+    //  if(chk_conn_d(c_dim1, c_id1, c_dim2-1, e_cc.conn.at(j)) )
+    //    return true;
+    //}
+    //return false;
   }
 }
 
@@ -1763,7 +1768,7 @@ bool cell_base::rem_cell(int dim, int tag) {
 // Replace tag_old with tag_new. Go over the upper cell connection list, check 
 // if tag exists. If so, check if the replacement also exists. If not, 
 // replace tag. 
-bool cell_base::repl_cell(int dim, int tag_new, int tag_old) {
+void cell_base::repl_cell(int dim, int tag_new, int tag_old) {
   ent_conn e_con;
   ent_conn e_adj;
   get_conn_up(dim, tag_old, &e_adj);
@@ -2479,7 +2484,7 @@ bool cell_base::fix_spur(int dim, int tag, bool clean) {
     }
     else {
       if(e_up.conn.size() < 3) {
-        assert(e_up.conn.size() == 2);
+        assert(e_up.conn.size() == 2 or e_up.conn.size() == 1);
         c_elem celem_curr = std::make_pair(
                               std::make_pair(dim, tag + 1),
                               std::make_pair(dim+1, e_up.conn.at(0) + 1) );
@@ -2487,12 +2492,12 @@ bool cell_base::fix_spur(int dim, int tag, bool clean) {
 
         rem_cell(dim, tag);
 
-        //if(e_up.conn.size() == 2) {
+        if(e_up.conn.size() == 2) {
           merg_cell(dim+1, e_up.conn.at(0), e_up.conn.at(1));
           celem_curr = std::make_pair(std::make_pair(dim+1, e_up.conn.at(1)+1),
                                   std::make_pair(dim+1, e_up.conn.at(0) + 1) );
           fix_list.push_back(celem_curr);
-        //}
+        }
 
         fixed = true;
       }
@@ -2706,6 +2711,7 @@ bool cell_base::add_1cell(int tag_0cell, struct ent_conn* two_cell) {
     e_con.add_ent(tag_1cell);
     set_conn(2, two_cell->conn.at(i), &e_con);
   }
+  return true;
 }
 
 
@@ -3246,7 +3252,6 @@ void cell_base::clear() {
   n[1] = 0;
   n[2] = 0;
   n[3] = 0;
-  dummy_clear_stop();
 
   for(int dim = 0; dim < 4; dim++) {
     cell_free.at(dim).clear();

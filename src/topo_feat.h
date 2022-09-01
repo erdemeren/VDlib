@@ -29,6 +29,9 @@ class ext_mesh;
 class ext_topo;
 class vd_processor;
 
+// TODO vd_sim::extract_data() function should be restructured to accept custom
+// vd_extractor objects.
+
 // Boundary condition type. Mainly used in constant of mobility calculation.
 // (2pi - 3acos(-1/3)) per adjacent 3-stratum for interior vertices.
 // NEUMANN_EXT adds the exterior 0-strata to the integral of the Gaussian curv.
@@ -230,7 +233,7 @@ class ext_mesh {
 
     void set_opts(vd_ext_opts opt_in);
     bool chk_field();
-    bool create_field();
+    void create_field();
 
     void set_mesh(apf::Mesh2* m_in, cell_base* cb_in);
     double get_avg_db(vd_entlist* e_list, int dim, int c_id);
@@ -646,6 +649,13 @@ enum class EXT_TYPE {
           // as the 3stratum) extract the interior angle. Assumes single 
           // connection for each joining strata at the mesh level.
           // ANGLE1; <ANGLE CSV FILE>; S1; S3; S20; S21
+  ANGLE_CS, // Given quadruplet of strata (S3, S0/1, S1/2_0, S1/2_1), a 3stratum 
+          // a joint 0/1stratum, and two bounding 1/2-strata (joining at the 
+          // 1stratum with the interior as the 3stratum) and a plane intersecting 
+          // the 0-stratum, extract the interior angle. Assumes single connection 
+          // for each joining strata at the mesh level. Plane defined by point 
+          // (P1 P2 P3), normal (N1 N2 N3). 
+          // ANGLE_CS; <ANGLE CSV FILE>; S3; D_j S_j; D_b1 S_b1; D_b2 S_b2; P1 P2 P3; N1 N2 N3;
   HAUSDORFF, // Given a boundary 2-stratum, and a reference triangulation of the 
              // same 2-stratum as an ".off" file, extract the triangulation of 
              // the current mesh and run an exterior CGAL program to write the 
@@ -895,6 +905,63 @@ class vd_ext_ANGLE2 {
                                std::vector<std::string> & opts_in,
                                double t_in);
 };
+
+////////////////////////////////////////////////
+// EXT_ANGLE_CS
+// Calculate the exterior angle on the given cross-section plane, outside given 3-stratum between two bounding 1-/2-strata joined at a given 0-/1-stratum entity. 
+// If the joint stratum is a 0-stratum, shift the plane to lie on the vertex.
+// If one of the bounding strata is a 1-stratum and the 1-stratum doesn't exactly 
+// lie in plane, find the 2-stratum entity that intersects the plane and calculate
+// the angle using the 2-stratum.
+class vd_ext_ANGLE_CS {
+
+  public:
+    cell_base* cb;
+    apf::Mesh2* m;
+    vd_entlist* e_list;
+    field_calc* f_calc;
+
+    apf::MeshEntity* e_b0;
+    apf::MeshEntity* e_b1;
+    apf::MeshEntity* e_j;
+
+    int s3;
+    // Stratum ids (apf style) of the bounding and joining strata.
+    int sj;
+    int sb0;
+    int sb1;
+
+    // Dimensions of the bounding and joining strata.
+    int db0;
+    int db1;
+    int dj;
+
+    apf::Vector3 P;
+    apf::Vector3 N;
+
+    double angle;
+    double t_curr;
+    double ang_tol;
+    double dist_tol;
+
+    // The connectivity of the 0-strata to the 3-strata.
+    std::string OUTPUTANGLE;
+
+    apf::MeshEntity* find_ent(std::vector<apf::MeshEntity*> &ents, apf::Vector3 &l_dir, apf::Vector3 &l_pos);
+    bool pl_int_tri_bound_line(apf::Mesh2* m, apf::MeshEntity* tet, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos);
+
+    void parse_opt(std::vector<std::string> &opts);
+    void write_csv();
+
+    vd_ext_ANGLE_CS();
+    vd_ext_ANGLE_CS(apf::Mesh2* m_in, cell_base* cb_in, vd_entlist* 
+                               e_list_in, field_calc* f_calc_in, 
+                               std::vector<std::string> & opts_in,
+                               double t_in);
+};
+
 
 // Calculate the vertices per unit area.
 double ext_ppa(apf::Mesh2* m, vd_entlist* e_list, std::vector<int>& s2_id);

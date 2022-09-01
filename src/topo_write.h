@@ -57,14 +57,14 @@ class file_list {
 void gmi_write_tess(struct gmi_model* m, const char* filename);
 
 
-void ReadNumbers(const std::string& filename, char sep, 
+void ReadNumbers(const std::string& filename, const char* sep, 
                  std::vector<std::vector<int> > & output);
 
-void ReadNumbers(const std::string& filename, char sep, 
+void ReadNumbers(const std::string& filename, const char* sep, 
                  std::vector<std::vector<double> > & output);
 
 // Read lines from filename, and add the lines separated by sep into the output.
-void ReadNames(const std::string& filename, const char * sep, 
+void ReadNames(const std::string& filename, const char* sep, 
                              std::vector<std::vector<std::string> > & output);
 
 // csvfile object:

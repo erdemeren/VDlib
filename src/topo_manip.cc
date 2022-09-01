@@ -13,6 +13,7 @@
 #include "topo_geom.h"
 #include "topo_solvlin.h"
 
+#include <algorithm>
 #include <math.h>       /* acos, isnan */
 
 #include <limits>       /* numeric_limits */
@@ -173,7 +174,7 @@ void vd_shr_surf(apf::Mesh2* m, int geom, float sp_size) {
 
   vd_find_ent_geom(m, &surf, geom, 2);
   vd_set_down(m, &surf, &vert, 2);
-  vd_ext_ent_geom(m, &vert, &quad, 0);
+  vd_ext_ent_geom(m, &vert, &quad, -1);
 
   apf::Vector3 surf_center(0,0,0);
   surf_center = vd_get_center(m, &quad);
@@ -941,6 +942,7 @@ apf::Vector3 vd_eqn_of_motion::vd_upd_vel_field_tri(apf::MeshEntity* vert,
 }
 apf::Vector3 vd_eqn_of_motion::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
            std::vector<apf::MeshEntity*>* edges, bool drag_local) {
+  return apf::Vector3(0,0,0);
 }
 
 // A set of vertices while skipping labeled vertices.
@@ -967,14 +969,14 @@ apf::Vector3 vd_eqn_of_motion::vd_calc_force_edge(apf::MeshEntity* vert,
 
 vd_eqn_of_motion::vd_eqn_of_motion() : m(NULL), c_base(NULL), f_calc(NULL), 
                                        e_list(NULL),
-                                       vel_field(NULL) {
+                                       vel_field(NULL), drag_rat(1000) {
 }
 
 vd_eqn_of_motion::vd_eqn_of_motion(apf::Mesh2* m_in, cell_base* c_base_in, 
                             field_calc* f_calc_in, 
                             vd_entlist* e_list_in) : 
                     m(m_in), f_calc(f_calc_in), e_list(e_list_in),
-                                       vel_field(NULL) {
+                                       vel_field(NULL), drag_rat(1000) {
 }
 
 vd_eqn_of_motion::~vd_eqn_of_motion() {
@@ -1009,6 +1011,10 @@ vd_eqn_of_motion& vd_eqn_of_motion::operator=(const vd_eqn_of_motion& that) {
 
   c_base = that.c_base;
   return *this;
+}
+
+void vd_eqn_of_motion::set_drag_rat(double rat_in) {
+  drag_rat = rat_in;
 }
 
 //////////////////////////////////////
@@ -1276,6 +1282,7 @@ apf::Vector3 vd_eqn_mason::vd_upd_vel_field_tri(apf::MeshEntity* vert,
 apf::Vector3 vd_eqn_mason::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
            std::vector<apf::MeshEntity*>* edges, bool drag_local) {
   std::cout << "upd_vel_field_edge not defined!" << std::endl;
+  return apf::Vector3(0,0,0);
 }
 
 // A set of vertices while skipping labeled vertices. Merging vertices contribute
@@ -1893,6 +1900,7 @@ apf::Vector3 vd_eqn_mason_NBC::vd_upd_vel_field_tri(apf::MeshEntity* vert,
 apf::Vector3 vd_eqn_mason_NBC::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
            std::vector<apf::MeshEntity*>* edges, bool drag_local) {
   std::cout << "upd_vel_field_edge not defined!" << std::endl;
+  return apf::Vector3(0,0,0);
 }
 
 // A set of vertices while skipping labeled vertices. Merging vertices contribute
@@ -2132,6 +2140,720 @@ apf::Vector3 vd_eqn_mason_NBC::vd_calc_force_edge(apf::MeshEntity* vert,
 
 vd_eqn_mason_NBC::~vd_eqn_mason_NBC() {
 }
+
+
+//////////////////////////////////////
+// vd_eqn_mason_NBC_drag
+//////////////////////////////////////
+// Modified version of vd_eqn_mason_NBC that replaces identity matrix multiplied by the drag term and the average triangle area/100 by an anisotropic drag tensor which is a sum of the outer products of the 2tratum edge directions across the vertex. The drag tensor is normalized by its largest eigenvalue and multiplied by the drag term and the average triangle area.
+// This heuristic effectively reduces the sliding.
+// TODO Include a way of specifying the drag term calculation in each equation of motion implementation rather than in a separate class.
+// Update the velocity field at:
+// Every boundary vertex.
+
+
+vd_eqn_mason_NBC_drag::vd_eqn_mason_NBC_drag() : vd_eqn_of_motion(),
+                               es_edge(0), es_surf(0), 
+                               p_i(0,0,0), p_j(0,0,0), n_ij(0,0,0), 
+                               p_ctr(0,0,0), temp(0,0,0), rhs(0,0,0),
+                               average(-1.), vel_field(NULL), drag_rat(1000) {
+}
+
+vd_eqn_mason_NBC_drag::vd_eqn_mason_NBC_drag(apf::Mesh2* m_in, cell_base* c_base_in,
+                            field_calc* f_calc_in, 
+                            vd_entlist* e_list_in) :
+                         vd_eqn_of_motion(m_in, c_base_in, f_calc_in, e_list_in), 
+                           es_edge(0), es_surf(0), 
+                           p_i(0,0,0), p_j(0,0,0), n_ij(0,0,0), 
+                           p_ctr(0,0,0), temp(0,0,0), rhs(0,0,0),
+                           average(-1.), drag_rat(1000) {
+  m = m_in;
+  f_calc = f_calc_in;
+  e_list = e_list_in;
+  c_base = c_base_in;
+}
+
+vd_eqn_mason_NBC_drag::vd_eqn_mason_NBC_drag(const vd_eqn_mason_NBC_drag& that) :
+                               vd_eqn_of_motion(), 
+                               es_edge(0), es_surf(0), 
+                               p_i(0,0,0), p_j(0,0,0), n_ij(0,0,0), 
+                               p_ctr(0,0,0), temp(0,0,0), rhs(0,0,0),
+                               average(-1.), vel_field(NULL), drag_rat(1000) {
+  m = that.m;
+  f_calc = that.f_calc;
+  e_list = that.e_list;
+  c_base = that.c_base;
+}
+
+vd_eqn_mason_NBC_drag& vd_eqn_mason_NBC_drag::operator=(const vd_eqn_mason_NBC_drag& that) {
+  m = that.m;
+  f_calc = that.f_calc;
+  e_list = that.e_list;
+  c_base = that.c_base;
+
+  es_edge.clear();
+  es_surf.clear();
+  apf::Vector3 zero(0,0,0);
+  p_i = zero;
+  p_j = zero;
+  n_ij = zero;
+  p_ctr = zero;
+  temp = zero;
+  rhs = zero;
+  average = that.average;
+  vel_field = that.vel_field;
+  drag_rat = that.drag_rat; 
+  return *this;
+}
+
+void vd_eqn_mason_NBC_drag::get_average_tri() {
+  average = f_calc->get_drag_glob();
+  if(average < - std::numeric_limits<double>::min())
+    average = getAverageEntSize(m, 2);
+}
+
+void vd_eqn_mason_NBC_drag::calc_vel_curr(apf::MeshEntity* vert) {
+
+  apf::Vector3 zero(0,0,0);
+  apf::Vector3 area_proj(0,0,0);
+  apf::Vector3 f_temp(0,0,0);
+  apf::Vector3 lat_temp(0,0,0);
+  rhs = zero;
+  temp = zero;
+
+  apf::Matrix3x3 m_eij(0,0,0,0,0,0,0,0,0);
+  apf::Matrix3x3 m_lat(0,0,0,0,0,0,0,0,0);
+
+  m->getUp(vert, up);
+  copy_ent_set(&es_edge, up);
+  vd_set_up(m, &es_edge, &es_surf);
+
+  m->getPoint(vert, 0, p_ctr);
+  //double norm_sum = 0;
+  //double len_avg = 0;
+  for(int i = 0; i < es_surf.size(); i++) {
+    apf::ModelEntity* em = m->toModel(es_surf.at(i));
+    int em_type = m->getModelType(em);
+    if(em_type == 2) {
+      m->getDownward(es_surf.at(i), 0, d_v);
+
+      int v1 = findIn(d_v, 3, vert);
+      m->getPoint(d_v[lookup_tri_vd[v1][0]], 0, p_i);
+      m->getPoint(d_v[lookup_tri_vd[v1][1]], 0, p_j);
+      p_i = p_i - p_ctr;
+      p_j = p_j - p_ctr;
+
+      n_ij = vd_cross(p_i, p_j);
+      //area_proj = area_proj + n_ij;
+
+      double norm = n_ij.getLength();
+      n_ij = norm_0(n_ij);
+
+      //norm_sum = norm_sum + norm;
+      //len_avg = len_avg + (p_i.getLength() + p_j.getLength())/2;
+      //rhs = rhs + vd_cross(n_ij, p_i) + vd_cross(n_ij, p_j);
+      // 1/2 |t_i| SUM_ij (n_ij_hat x t_i_hat)gamma(n_ij_hat))
+      // |t_i| t_i_hat terms are represented by p_i - p_j
+      f_temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, es_surf.at(i));
+      if(f_calc->chk_vert_special(m, vert)) {
+        f_temp = f_calc->get_vec_special(m, vert, f_temp);
+        n_ij = f_calc->get_vec_special(m, vert, n_ij);
+      }
+      rhs = rhs + f_temp;
+      m_eij = m_eij + tensorProduct(n_ij, n_ij)*norm*
+                                          f_calc->d2(m, es_surf.at(i));
+      lat_temp = p_i - p_j;
+      m_lat = m_lat + tensorProduct(lat_temp, lat_temp);
+    }
+  }
+  //len_avg = len_avg/es_surf.size();
+  //area_proj = area_proj/6;
+  apf::Vector3 eigenVectors[3];
+  double eigenValues[3];
+  eigen(m_lat, eigenVectors, eigenValues);
+  int max_id = std::max_element(eigenValues, eigenValues + 3) - eigenValues;
+  int min_id = std::min_element(eigenValues, eigenValues + 3) - eigenValues;
+  if(eigenValues[min_id] < std::numeric_limits<double>::min())
+    m_lat = m_lat + tensorProduct(eigenVectors[min_id], eigenVectors[min_id])/100.;
+
+  if(eigenValues[max_id] > std::numeric_limits<double>::min())
+    m_lat = m_lat/eigenValues[max_id];
+  else
+    m_lat = apf::Matrix3x3(1,0,0,0,1,0,0,0,1);
+
+  m_eij = m_eij + m_lat*average*average*f_calc->get_d2_glob()/drag_rat;
+  //m_eij = m_eij + M_EYE*average*average*f_calc->get_d2_glob()/drag_rat;
+  // 2017ActeMateMason:
+  // rhs = F*2
+  // m_eij = D*6
+  // apf::invert(m_eij) : Mobility tensor/6.
+  temp = apf::invert(m_eij)*rhs*3;
+  assert(!std::isnan(temp.getLength()));
+  apf::setVector(vel_field, vert, 0, temp);
+}
+
+apf::Vector3 vd_eqn_mason_NBC_drag::calc_vel_curr_tri(apf::MeshEntity* vert,
+                           std::vector<apf::MeshEntity*>* tris) {
+
+  apf::Vector3 zero(0,0,0);
+  apf::Vector3 f_temp(0,0,0);
+  apf::Vector3 lat_temp(0,0,0);
+  rhs = zero;
+  temp = zero;
+
+  apf::Matrix3x3 m_eij(0,0,0,0,0,0,0,0,0);
+  apf::Matrix3x3 m_lat(0,0,0,0,0,0,0,0,0);
+
+  m->getPoint(vert, 0, p_ctr);
+
+  for(int i = 0; i < tris->size(); i++) {
+    apf::ModelEntity* em = m->toModel(tris->at(i));
+    int em_type = m->getModelType(em);
+    if(em_type == 2) {
+      m->getDownward(tris->at(i), 0, d_v);
+
+      int v1 = findIn(d_v, 3, vert);
+      m->getPoint(d_v[lookup_tri_vd[v1][0]], 0, p_i);
+      m->getPoint(d_v[lookup_tri_vd[v1][1]], 0, p_j);
+      p_i = p_i - p_ctr;
+      p_j = p_j - p_ctr;
+
+      n_ij = vd_cross(p_i, p_j);
+      double norm = n_ij.getLength();
+      n_ij = norm_0(n_ij);
+
+      //rhs = rhs + vd_cross(n_ij, p_i) + vd_cross(n_ij, p_j);
+      // 1/2 |t_i| SUM_ij (n_ij_hat x t_i_hat)gamma(n_ij_hat))
+      // |t_i| t_i_hat terms are represented by p_i - p_j
+      f_temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, tris->at(i));
+      if(f_calc->chk_vert_special(m, vert)) {
+        f_temp = f_calc->get_vec_special(m, vert, f_temp);
+        n_ij = f_calc->get_vec_special(m, vert, n_ij);
+      }
+      rhs = rhs + f_temp;
+      lat_temp = p_i - p_j;
+      m_lat = m_lat + tensorProduct(lat_temp, lat_temp);
+      m_eij = m_eij + tensorProduct(n_ij, n_ij)*norm*
+                                          f_calc->d2(m, tris->at(i));
+    }
+  }
+
+  apf::Vector3 eigenVectors[3];
+  double eigenValues[3];
+  eigen(m_lat, eigenVectors, eigenValues);
+  int max_id = std::max_element(eigenValues, eigenValues + 3) - eigenValues;
+  int min_id = std::min_element(eigenValues, eigenValues + 3) - eigenValues;
+  if(eigenValues[min_id] < std::numeric_limits<double>::min())
+    m_lat = m_lat + tensorProduct(eigenVectors[min_id], eigenVectors[min_id])/100.;
+
+  if(eigenValues[max_id] > std::numeric_limits<double>::min())
+    m_lat = m_lat/eigenValues[max_id];
+  else
+    m_lat = apf::Matrix3x3(1,0,0,0,1,0,0,0,1);
+
+  m_eij = m_eij + m_lat*average*average*f_calc->get_d2_glob()/drag_rat;
+  //m_eij = m_eij + M_EYE*average*average*f_calc->get_d2_glob()/drag_rat;
+
+  temp = apf::invert(m_eij)*rhs*3;
+  assert(!std::isnan(temp.getLength()));
+  apf::setVector(vel_field, vert, 0, temp);
+  return temp;
+}
+
+void vd_eqn_mason_NBC_drag::calc_vel() {
+  vel_field = m->findField("velocity_field");
+
+  apf::MeshEntity* vert;
+
+  apf::ModelEntity* em;
+  int em_type;
+
+  es_edge.clear();
+  es_surf.clear();
+
+  get_average_tri();
+  apf::Vector3 zero(0,0,0);
+
+  apf::MeshIterator* it = m->begin(0);
+  while ((vert = m->iterate(it))) {
+    em = m->toModel(vert);
+    em_type = m->getModelType(em);
+    if(f_calc->chk_skip(m, vert)) {
+      apf::setVector(vel_field, vert, 0, zero);
+    }
+    else {
+      calc_vel_curr(vert);
+    }
+    if(f_calc->chk_vert_special(m, vert)) {
+      f_calc->fix_vel_special(m, vert);
+    }
+  }
+  m->end(it);
+  printf("Velocity field finished.\n");
+}
+
+void vd_eqn_mason_NBC_drag::calc_vel(std::vector<apf::MeshEntity*>* verts, bool drag_local) {
+  vel_field = m->findField("velocity_field");
+  apf::Field* drag_field = vd_att_vm_field(m, "drag_field");
+  apf::Field* drag_lat_field = vd_att_vm_field(m, "drag_lat_field");
+  apf::Field* force_field = vd_att_vv_field(m, "force_field");
+
+  apf::MeshEntity* vert;
+
+  apf::ModelEntity* em;
+  int em_type;
+
+  es_edge.clear();
+  es_surf.clear();
+
+  get_average_tri();
+  apf::Vector3 zero(0,0,0);
+  apf::Vector3 rhs(0,0,0);
+
+  vd_set_up(m, verts, &es_edge);
+  vd_set_up(m, &es_edge, &es_surf);
+
+  std::vector<apf::Vector3> p(3, apf::Vector3(0,0,0));
+  apf::Vector3 p_i(0,0,0);
+  apf::Vector3 p_j(0,0,0);
+
+  apf::Vector3 f_curr(0,0,0);
+  apf::Vector3 f_temp(0,0,0);
+  apf::Vector3 lat_temp(0,0,0);
+
+  apf::Vector3 n_ij(0,0,0);
+  apf::Vector3 n_ij_temp(0,0,0);
+
+  apf::Matrix3x3 m_temp(0,0,0,0,0,0,0,0,0);
+  apf::Matrix3x3 m_lat(0,0,0,0,0,0,0,0,0);
+
+  // TODO don't need to calculate the edge directions twice for each edge...
+  for(int i = 0; i < es_surf.size(); i++) {
+    apf::ModelEntity* em = m->toModel(es_surf.at(i));
+    int em_type = m->getModelType(em);
+    if(em_type == 2) {
+      double gam_curr = f_calc->gam2(m, es_surf.at(i));
+      double drag_curr = f_calc->d2(m, es_surf.at(i));
+
+      m->getDownward(es_surf.at(i), 0, d_v);
+
+      for(int j = 0; j < 3; j++) {
+        m->getPoint(d_v[j], 0, p.at(j));
+      }
+
+      // vertex 1
+      int v1 = 0;
+      p_i = p.at(lookup_tri_vd[v1][0]) - p.at(v1);
+      p_j = p.at(lookup_tri_vd[v1][1]) - p.at(v1);
+
+      n_ij = vd_cross(p_i, p_j);
+      double norm = n_ij.getLength();
+      n_ij = norm_0(n_ij);
+      n_ij_temp = n_ij;
+      // 1/2 |t_i| SUM_ij (n_ij_hat x t_i_hat)gamma(n_ij_hat))
+      // |t_i| t_i_hat terms are represented by p_i - p_j
+      f_curr = vd_cross(n_ij, p_i-p_j)*gam_curr;
+      f_temp = f_curr;
+
+      vert = d_v[v1];
+      if(f_calc->chk_vert_special(m, vert)) {
+        f_temp = f_calc->get_vec_special(m, vert, f_curr);
+        n_ij_temp = f_calc->get_vec_special(m, vert, n_ij);
+      }
+      apf::getVector(force_field, vert, 0, rhs);
+      rhs = rhs + f_temp;
+      apf::setVector(force_field, vert, 0, rhs);
+
+      apf::getMatrix(drag_field, vert, 0, m_temp);
+      m_temp = m_temp + tensorProduct(n_ij_temp, n_ij_temp)*norm*drag_curr;
+      apf::setMatrix(drag_field, vert, 0, m_temp);
+      apf::getMatrix(drag_field, vert, 0, m_lat);
+      lat_temp = p_i - p_j;
+      m_lat = m_lat + tensorProduct(lat_temp, lat_temp);
+      apf::setMatrix(drag_lat_field, vert, 0, m_lat);
+
+      //m_eij = m_eij + tensorProduct(n_ij, n_ij)*norm*drag_curr;
+
+      // vertex 2
+      v1 = 1;
+      p_i = p.at(lookup_tri_vd[v1][0]) - p.at(v1);
+      p_j = p.at(lookup_tri_vd[v1][1]) - p.at(v1);
+
+      f_curr = vd_cross(n_ij, p_i-p_j)*gam_curr;
+      f_temp = f_curr;
+
+      vert = d_v[v1];
+      if(f_calc->chk_vert_special(m, vert)) {
+        f_temp = f_calc->get_vec_special(m, vert, f_curr);
+        n_ij_temp = f_calc->get_vec_special(m, vert, n_ij);
+      }
+      apf::getVector(force_field, vert, 0, rhs);
+      rhs = rhs + f_temp;
+      apf::setVector(force_field, vert, 0, rhs);
+
+      apf::getMatrix(drag_field, vert, 0, m_temp);
+      m_temp = m_temp + tensorProduct(n_ij_temp, n_ij_temp)*norm*drag_curr;
+      apf::setMatrix(drag_field, vert, 0, m_temp);
+      apf::getMatrix(drag_field, vert, 0, m_lat);
+      lat_temp = p_i - p_j;
+      m_lat = m_lat + tensorProduct(lat_temp, lat_temp);
+      apf::setMatrix(drag_lat_field, vert, 0, m_lat);
+
+      // vertex 3
+      v1 = 2;
+      vert = d_v[v1];
+
+      p_i = p.at(lookup_tri_vd[v1][0]) - p.at(v1);
+      p_j = p.at(lookup_tri_vd[v1][1]) - p.at(v1);
+      f_curr = vd_cross(n_ij, p_i-p_j)*gam_curr;
+      f_temp = f_curr;
+
+      if(f_calc->chk_vert_special(m, vert)) {
+        f_temp = f_calc->get_vec_special(m, vert, f_curr);
+        n_ij_temp = f_calc->get_vec_special(m, vert, n_ij);
+      }
+      apf::getVector(force_field, vert, 0, rhs);
+      rhs = rhs + f_temp;
+      apf::setVector(force_field, vert, 0, rhs);
+
+      apf::getMatrix(drag_field, vert, 0, m_temp);
+      m_temp = m_temp + tensorProduct(n_ij_temp, n_ij_temp)*norm*drag_curr;
+      apf::setMatrix(drag_field, vert, 0, m_temp);
+      apf::getMatrix(drag_field, vert, 0, m_lat);
+      lat_temp = p_i - p_j;
+      m_lat = m_lat + tensorProduct(lat_temp, lat_temp);
+      apf::setMatrix(drag_lat_field, vert, 0, m_lat);
+    }
+  }
+
+  apf::Matrix3x3 m_sing(0,0,0,0,0,0,0,0,0);
+  m_sing = M_EYE*average*average*f_calc->get_d2_glob()/drag_rat;
+  for(int i = 0; i < verts->size(); i++) {
+    vert = verts->at(i);
+    apf::getVector(force_field, verts->at(i), 0, rhs);
+    apf::getMatrix(drag_field, verts->at(i), 0, m_temp);
+    apf::getMatrix(drag_lat_field, verts->at(i), 0, m_lat);
+    m_temp = m_temp + m_sing;
+
+    apf::Vector3 eigenVectors[3];
+    double eigenValues[3];
+    eigen(m_lat, eigenVectors, eigenValues);
+    int max_id = std::max_element(eigenValues, eigenValues + 3) - eigenValues;
+    int min_id = std::min_element(eigenValues, eigenValues + 3) - eigenValues;
+    if(eigenValues[min_id] < std::numeric_limits<double>::min())
+      m_lat = m_lat + tensorProduct(eigenVectors[min_id], eigenVectors[min_id])/100.;
+
+    if(eigenValues[max_id] > std::numeric_limits<double>::min())
+      m_lat = m_lat/eigenValues[max_id];
+    else
+      m_lat = apf::Matrix3x3(1,0,0,0,1,0,0,0,1);
+
+    m_temp = m_temp + m_lat*average*average*f_calc->get_d2_glob()/drag_rat;
+
+    temp = apf::invert(m_temp)*rhs*3;
+    assert(!std::isnan(temp.getLength()));
+    apf::setVector(vel_field, verts->at(i), 0, temp);
+
+    if(f_calc->chk_vert_special(m, vert)) {
+      f_calc->fix_vel_special(m, vert);
+    }
+  }
+  apf::destroyField(drag_field);
+  apf::destroyField(drag_lat_field);
+  apf::destroyField(force_field);
+
+/*
+  for(int i = 0; i < verts->size(); i++) {
+    vert = verts->at(i);
+    em = m->toModel(vert);
+    em_type = m->getModelType(em);
+    if(f_calc->chk_skip(m, vert)) {
+      apf::setVector(vel_field, vert, 0, zero);
+    }
+    else {
+      vd_upd_vel_field(vert, drag_local);
+    }
+    if(f_calc->chk_vert_special(m, vert)) {
+      f_calc->fix_vel_special(m, vert);
+    }
+  }
+*/
+  printf("Velocity field finished.\n");
+}
+
+// A single vertex.
+void vd_eqn_mason_NBC_drag::vd_upd_vel_field(apf::MeshEntity* vert, bool drag_local) {
+  vel_field = m->findField("velocity_field");
+  apf::ModelEntity* em = m->toModel(vert);
+  int em_type = m->getModelType(em);
+
+  if(drag_local) {
+    average = getAverageEntSize(m, vert, 2);
+  }
+  else
+    get_average_tri();
+  calc_vel_curr(vert);
+}
+
+// A single vertex.
+apf::Vector3 vd_eqn_mason_NBC_drag::vd_upd_vel_field_tri(apf::MeshEntity* vert, 
+                           std::vector<apf::MeshEntity*>* tris, bool drag_local) {
+  vel_field = m->findField("velocity_field");
+  apf::ModelEntity* em = m->toModel(vert);
+  int em_type = m->getModelType(em);
+
+  if(drag_local) {
+    average = getAverageEntSize(m, vert, 2);
+  }
+  else
+    get_average_tri();
+  return calc_vel_curr_tri(vert, tris);
+}
+
+apf::Vector3 vd_eqn_mason_NBC_drag::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
+           std::vector<apf::MeshEntity*>* edges, bool drag_local) {
+  std::cout << "upd_vel_field_edge not defined!" << std::endl;
+  return apf::Vector3(0,0,0);
+}
+
+// A set of vertices while skipping labeled vertices. Merging vertices contribute
+// to the target vertex and they all have the same resultant force and velocity.
+void vd_eqn_mason_NBC_drag::vd_upd_vel_field_merg(std::vector<apf::MeshEntity*> &vert,
+                       std::map<apf::MeshEntity*, apf::MeshEntity*> &v_map,
+                       bool drag_local) {
+  vel_field = m->findField("velocity_field");
+
+  std::map<apf::MeshEntity*, bool> merg{};
+  apf::MeshEntity* v_merg = NULL;
+  for(int i = 0; i < vert.size(); i++) {
+    if(v_map[vert.at(i)] != NULL) {
+      merg[vert.at(i)] = true;
+      if(v_merg == NULL)
+        v_merg = v_map[vert.at(i)];
+    }
+  }
+  assert(v_merg != NULL);
+
+  std::vector<apf::MeshEntity*>::iterator it;
+  it = std::find(vert.begin(), vert.end(), v_merg);
+  assert(it != vert.end());
+  int i_m = std::distance(vert.begin(), it);
+
+  apf::Vector3 f_temp(0,0,0);
+  std::vector<apf::Vector3> rhs(vert.size(), apf::Vector3(0,0,0));
+  std::vector<apf::Matrix3x3> m_eij(vert.size(), 
+                              apf::Matrix3x3(0,0,0,0,0,0,0,0,0));
+  apf::Matrix3x3 m_eye(1,0,0,0,1,0,0,0,1);
+
+  std::vector<double> average_v(vert.size());
+  if(drag_local) {
+    for(int i = 0; i < vert.size(); i++) {
+      average_v.at(i) = getAverageEntSize(m, vert.at(i), 2);
+    }
+  }
+  else {
+    double avg_temp = 0;
+    get_average_tri();
+    for(int i = 0; i < vert.size(); i++) {
+      average_v.at(i) = average;
+    }
+  }
+
+  for(int i = 0; i < vert.size(); i++) {
+    m->getUp(vert.at(i), up);
+    copy_ent_set(&es_edge, up);
+    vd_set_up(m, &es_edge, &es_surf);
+
+    m->getPoint(vert.at(i), 0, p_ctr);
+
+    for(int j = 0; j < es_surf.size(); j++) {
+      apf::ModelEntity* em = m->toModel(es_surf.at(j));
+      int em_type = m->getModelType(em);
+      if(em_type == 2) {
+        m->getDownward(es_surf.at(j), 0, d_v);
+
+        int v1 = findIn(d_v, 3, vert.at(i));
+        m->getPoint(d_v[lookup_tri_vd[v1][0]], 0, p_i);
+        m->getPoint(d_v[lookup_tri_vd[v1][1]], 0, p_j);
+
+        p_i = p_i - p_ctr;
+        p_j = p_j - p_ctr;
+
+        n_ij = vd_cross(p_i, p_j);
+        double norm = n_ij.getLength();
+        n_ij = norm_0(n_ij);
+
+        if(!merg[vert.at(i)]) {
+          f_temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, es_surf.at(j));
+          if(f_calc->chk_vert_special(m, vert.at(i))) {
+            f_temp = f_calc->get_vec_special(m, vert.at(i), f_temp);
+            n_ij = f_calc->get_vec_special(m, vert.at(i), n_ij);
+          }
+          rhs.at(i) = rhs.at(i) + f_temp;
+          m_eij.at(i) = m_eij.at(i) + tensorProduct(n_ij, n_ij)*norm*
+                                              f_calc->d2(m, es_surf.at(j));
+        }
+        else {
+          f_temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, es_surf.at(j));
+          if(f_calc->chk_vert_special(m, vert.at(i_m))) {
+            f_temp = f_calc->get_vec_special(m, vert.at(i_m), f_temp);
+            n_ij = f_calc->get_vec_special(m, vert.at(i_m), n_ij);
+          }
+          rhs.at(i_m) = rhs.at(i_m) + f_temp;
+          m_eij.at(i_m) = m_eij.at(i_m) + tensorProduct(n_ij, n_ij)*norm*
+                                              f_calc->d2(m, es_surf.at(j));
+        }
+      }
+    }
+    if(!merg[vert.at(i)]) {
+      m_eij.at(i) = m_eij.at(i) + m_eye*average_v.at(i)*average_v.at(i)*f_calc->get_d2_glob()/drag_rat;
+    }
+    else {
+      m_eij.at(i_m) = m_eij.at(i_m) + m_eye*average_v.at(i)*average_v.at(i)*f_calc->get_d2_glob()/drag_rat;
+    }
+  }
+
+  for(int i = 0; i < vert.size(); i++) {
+    if(!merg[vert.at(i)]) {
+      temp = apf::invert(m_eij.at(i))*rhs.at(i)*3;
+      assert(!std::isnan(temp.getLength()));
+      apf::setVector(vel_field, vert.at(i), 0, temp);
+    }
+  }
+  for(int i = 0; i < vert.size(); i++) {
+    if(merg[vert.at(i)]) {
+      temp = apf::invert(m_eij.at(i_m))*rhs.at(i_m)*3;
+      assert(!std::isnan(temp.getLength()));
+      apf::setVector(vel_field, vert.at(i), 0, temp);
+    }
+  }
+}
+
+// Calculate the force acting on a vertex.
+apf::Vector3 vd_eqn_mason_NBC_drag::vd_calc_force(apf::MeshEntity* vert) {
+  apf::ModelEntity* em = m->toModel(vert);
+  int em_type = m->getModelType(em);
+  temp = apf::Vector3(0,0,0);
+  rhs = apf::Vector3(0,0,0);
+
+  m->getUp(vert, up);
+  copy_ent_set(&es_edge, up);
+  vd_set_up(m, &es_edge, &es_surf);
+
+  m->getPoint(vert, 0, p_ctr);
+
+  for(int i = 0; i < es_surf.size(); i++) {
+    em = m->toModel(es_surf.at(i));
+    em_type = m->getModelType(em);
+    if(em_type == 2) {
+      m->getDownward(es_surf.at(i), 0, d_v);
+
+      int v1 = findIn(d_v, 3, vert);
+      m->getPoint(d_v[lookup_tri_vd[v1][0]], 0, p_i);
+      m->getPoint(d_v[lookup_tri_vd[v1][1]], 0, p_j);
+
+      p_i = p_i - p_ctr;
+      p_j = p_j - p_ctr;
+
+      n_ij = vd_cross(p_i, p_j);
+      n_ij = norm_0(n_ij);
+
+      temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, es_surf.at(i));
+      if(f_calc->chk_vert_special(m, vert)) {
+        temp = f_calc->get_vec_special(m, vert, temp);
+      }
+
+      rhs = rhs + temp;
+    }
+  }
+  return rhs/2;
+}
+
+apf::Vector3 vd_eqn_mason_NBC_drag::vd_calc_force_tri(apf::MeshEntity* vert, 
+                       std::vector<apf::MeshEntity*>* tris) {
+  apf::ModelEntity* em = m->toModel(vert);
+  int em_type = m->getModelType(em);
+  temp = apf::Vector3(0,0,0);
+  rhs = apf::Vector3(0,0,0);
+
+  m->getPoint(vert, 0, p_ctr);
+  for(int i = 0; i < tris->size(); i++) {
+    em = m->toModel(tris->at(i));
+    em_type = m->getModelType(em);
+    if(em_type == 2) {
+
+      m->getDownward(tris->at(i), 0, d_v);
+
+      int v1 = findIn(d_v, 3, vert);
+      m->getPoint(d_v[lookup_tri_vd[v1][0]], 0, p_i);
+      m->getPoint(d_v[lookup_tri_vd[v1][1]], 0, p_j);
+
+      p_i = p_i - p_ctr;
+      p_j = p_j - p_ctr;
+
+      n_ij = vd_cross(p_i, p_j);
+      n_ij = norm_0(n_ij);
+      temp = vd_cross(n_ij, p_i-p_j)*f_calc->gam2(m, tris->at(i));
+      if(f_calc->chk_vert_special(m, vert)) {
+        temp = f_calc->get_vec_special(m, vert, temp);
+      }
+      rhs = rhs + vd_cross(n_ij, p_i-p_j)* 
+                                f_calc->gam2(m, tris->at(i));
+    }
+  }
+  return rhs/2;
+}
+
+apf::Vector3 vd_eqn_mason_NBC_drag::vd_calc_force_edge(apf::MeshEntity* vert, 
+                       std::vector<apf::MeshEntity*>* edges) {
+  apf::ModelEntity* em = m->toModel(vert);
+  int em_type = m->getModelType(em);
+  temp = apf::Vector3(0,0,0);
+  rhs = apf::Vector3(0,0,0);
+
+  m->getPoint(vert, 0, p_ctr);
+  std::vector<apf::MeshEntity*> t_set(0);
+
+  for(int i = 0; i < edges->size(); i++) {
+    vd_set_up(m, edges->at(i), &t_set);
+    for(int j = 0; j < t_set.size(); j++) {
+      em = m->toModel(t_set.at(j));
+      em_type = m->getModelType(em);
+      if(em_type == 2) {
+        m->getDownward(t_set.at(j), 0, d_v);
+        m->getDownward(t_set.at(j), 1, d_e);
+
+        int v1 = findIn(d_v, 3, vert);
+        int ii = lookup_tri_e[v1][0];
+        int jj = lookup_tri_e[v1][1];
+        int iv = lookup_tri_vd[v1][0];
+        int jv = lookup_tri_vd[v1][1];
+        if(d_e[ii] != edges->at(i)) {
+          ii = lookup_tri_e[v1][1];
+          jj = lookup_tri_e[v1][0];
+          iv = lookup_tri_vd[v1][1];
+          jv = lookup_tri_vd[v1][0];
+        }
+        m->getPoint(d_v[iv], 0, p_i);
+        m->getPoint(d_v[jv], 0, p_j);
+
+        temp = vd_dir_in_pl(p_ctr, p_i, p_j)* 
+                                  f_calc->gam2(m, t_set.at(j))*
+                                  (p_i - p_ctr).getLength();
+        if(f_calc->chk_vert_special(m, vert)) {
+          temp = f_calc->get_vec_special(m, vert, temp);
+        }
+
+        rhs = rhs + temp;
+      }
+    }
+  }
+  return rhs/2;
+}
+
+vd_eqn_mason_NBC_drag::~vd_eqn_mason_NBC_drag() {
+}
+
 //////////////////////////////////////
 // vd_eqn_kuprat
 //////////////////////////////////////
@@ -2407,6 +3129,7 @@ apf::Vector3 vd_eqn_kuprat::vd_upd_vel_field_tri(apf::MeshEntity* vert,
 apf::Vector3 vd_eqn_kuprat::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
            std::vector<apf::MeshEntity*>* edges, bool drag_local) {
   std::cout << "upd_vel_field_edge not defined!" << std::endl;
+  return apf::Vector3(0,0,0);
 }
 
 
@@ -2905,6 +3628,7 @@ apf::Vector3 vd_eqn_kuprat_NBC::vd_upd_vel_field_tri(apf::MeshEntity* vert,
 apf::Vector3 vd_eqn_kuprat_NBC::vd_upd_vel_field_edge(apf::MeshEntity* vert, 
            std::vector<apf::MeshEntity*>* edges, bool drag_local) {
   std::cout << "upd_vel_field_edge not defined!" << std::endl;
+  return apf::Vector3(0,0,0);
 }
 
 
@@ -3816,10 +4540,12 @@ apf::Vector3 vd_eqn_lazar::vd_calc_force(apf::MeshEntity* vert) {
 
 apf::Vector3 vd_eqn_lazar::vd_calc_force_edge(apf::MeshEntity* vert, 
                        std::vector<apf::MeshEntity*>* edges) {
+  return apf::Vector3(0,0,0);
 }
 
 apf::Vector3 vd_eqn_lazar::vd_calc_force_tri(apf::MeshEntity* vert, 
                        std::vector<apf::MeshEntity*>* tris) {
+  return apf::Vector3(0,0,0);
 }
 
 vd_eqn_lazar::~vd_eqn_lazar() {
@@ -5606,7 +6332,6 @@ void vd_eqn_kuprat_volm::calc_vel_curr(apf::MeshEntity* vert) {
     else
       temp = temp + a_norm[t_curr]*2*q_tet[es_tet.at(i)]/h_i;
 
-    //dummy_chk_stop();
   }
   apf::setVector(vel_field, vert, 0, temp);
 }
@@ -7641,7 +8366,6 @@ double vd_find_min_mult(apf::Mesh2* m, std::vector<apf::MeshEntity*>* vert,
           assert(t_pos.getLength() > std::numeric_limits<double>::min());
           sn = norm_0(sn);
 
-          dummy_chk_stop();
           if(sn*t_pos < - std::numeric_limits<double>::min()
               and std::fabs(sn*t_pos) > std::numeric_limits<double>::min())
             sn = sn*(-1);

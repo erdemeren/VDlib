@@ -1,3 +1,10 @@
+F_DEBUG ?= 1
+ifeq ($(F_DEBUG), 1)
+  COMPFLAGS=-g3 -lmpi -std=gnu++11 -gdwarf-2 -Wreturn-type -no-pie
+else
+  COMPFLAGS=-O2 -lmpi -std=gnu++11 -Wreturn-type -no-pie
+endif
+
 CC=mpicxx
 COMPFLAGS=-g -lmpi -std=gnu++11 -gdwarf-2 -g3
 

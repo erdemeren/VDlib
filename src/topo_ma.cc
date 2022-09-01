@@ -646,6 +646,7 @@ vd_ma_input& vd_ma_input::operator=(const vd_ma_input& that) {
   shouldRefineLayer = that.shouldRefineLayer;
   shouldCoarsenLayer = that.shouldCoarsenLayer;
   splitAllLayerEdges = that.splitAllLayerEdges;
+  return *this;
 }
 
 vd_ma_input::vd_ma_input() : 
@@ -981,13 +982,15 @@ apf::MeshEntity* DistBurner::tri_proj_v(apf::MeshEntity* v, apf::MeshEntity* tri
 
 // Calculate the distance from the vertex to a given entity.
 double DistBurner::calc_d_tri(apf::MeshEntity* v, apf::MeshEntity* tri) {
+  return 0.;
 }
 
 double DistBurner::calc_d_edge(apf::MeshEntity* v, apf::MeshEntity* edge) {
+  return 0.;
 }
 double DistBurner::calc_d_vert(apf::MeshEntity* v, apf::MeshEntity* vert) {
   apf::Downward d_v;
-
+  return 0.;
 }
 
 
@@ -1773,7 +1776,6 @@ void Linear_0cell::load_0cell() {
 }
 
 void Linear_0cell::clear() {
-  dummy_clear_stop();
 
   cell0_pos.clear();
   for(int i = 0; i < cnc0.size(); i++) {

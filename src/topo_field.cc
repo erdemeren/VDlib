@@ -169,6 +169,31 @@ apf::Field* vd_att_vm_field(apf::Mesh2* m, const char* f_name) {
 }
 
 // Attach a scalar field over triangles.
+apf::Field* vd_att_es_field(apf::Mesh2* m, const char* f_name) {
+
+  apf::Field* field_curr;
+  // Attach a vector field
+  if (m->findField(f_name)) {
+    field_curr = m->findField(f_name);
+  }
+  else {
+    field_curr = apf::createField(m, f_name, apf::SCALAR, apf::getConstant(1));
+  }
+
+  apf::MeshIterator* it = m->begin(1);
+  apf::MeshEntity* e;
+
+  while ((e = m->iterate(it)))
+  {
+    // This works with other mesh entities, where one can specify current 
+    // node to be modified:
+    apf::setScalar(field_curr, e, 0, 0);
+  }  
+  m->end(it);
+  return field_curr;
+}
+
+// Attach a scalar field over triangles.
 apf::Field* vd_att_ts_field(apf::Mesh2* m, const char* f_name) {
 
   apf::Field* field_curr;

@@ -78,7 +78,6 @@ void write_label_y_vert(vd_series_ss* data, const char* fname) {
 // TODO use templates, less ugly and probably easier to maintain
 // vd_series
 void vd_series_ss::clear() {
-  dummy_clear_stop();
   x_name.clear();
   y_name.clear();
   title.clear();
@@ -88,7 +87,6 @@ void vd_series_ss::clear() {
 }
 
 vd_series_ss::vd_series_ss(const vd_series_ss& that) {
-  dummy_clear_stop();
 
   x_name = that.x_name;
   y_name = that.y_name;
@@ -98,7 +96,6 @@ vd_series_ss::vd_series_ss(const vd_series_ss& that) {
   y = that.y;
 }
 vd_series_ss& vd_series_ss::operator=(const vd_series_ss& that) {
-  dummy_clear_stop();
   x_name = that.x_name;
   y_name = that.y_name;
   title.clear();
@@ -122,7 +119,6 @@ vd_series_ss::~vd_series_ss() {
 }
 
 void vd_series_sv::clear() {
-  dummy_clear_stop();
   x_name.clear();
   y_name.clear();
   title.clear();
@@ -132,7 +128,6 @@ void vd_series_sv::clear() {
 }
 
 vd_series_sv::vd_series_sv(const vd_series_sv& that) {
-  dummy_clear_stop();
   x_name = that.x_name;
   y_name = that.y_name;
   title.clear();
@@ -142,7 +137,6 @@ vd_series_sv::vd_series_sv(const vd_series_sv& that) {
 }
 
 vd_series_sv& vd_series_sv::operator=(const vd_series_sv& that) {
-  dummy_clear_stop();
   x_name = that.x_name;
   y_name = that.y_name;
   title = that.title;
@@ -166,7 +160,6 @@ vd_series_sv::~vd_series_sv() {
 }
 
 void vd_series_vs::clear() {
-  dummy_clear_stop();
   x_name.clear();
   y_name.clear();
   title.clear();
@@ -207,7 +200,6 @@ vd_series_vs::~vd_series_vs() {
 }
 
 void vd_series_vv::clear() {
-  dummy_clear_stop();
   x_name.clear();
   y_name.clear();
   title.clear();
@@ -347,7 +339,6 @@ void vd_ext_opts::vd_calc_field(apf::Mesh2* m, apf::MeshEntity* e) {
 }
 
 void vd_ext_opts::clear() {
-  dummy_clear_stop();
 
   n_name.clear();
   n_flag = false;
@@ -487,7 +478,7 @@ bool ext_mesh::chk_field() {
   return m->findField(m_opts.n_name.c_str());
 }
 
-bool ext_mesh::create_field() {
+void ext_mesh::create_field() {
   if(!chk_field()) {
     if(m_opts.f_type == apf::SCALAR) {
       vd_att_vs_field(m, m_opts.n_name.c_str());
@@ -574,7 +565,6 @@ void ext_mesh::get_per_cell_all(std::vector<vd_series_ss>* data) {
 */
 
 void ext_mesh::get_meas_cell_all(std::vector<vd_series_ss>* data) {
-  dummy_clear_stop();
 
   for(int i = 0; i < data->size(); i++) {
     data->at(i).clear();
@@ -2167,6 +2157,7 @@ EXT_TYPE conv_str2ext(const std::string& str) {
   else if(str == "COUNT") return EXT_TYPE::COUNT;
   else if(str == "ANGLE1") return EXT_TYPE::ANGLE1;
   else if(str == "ANGLE2") return EXT_TYPE::ANGLE2;
+  else if(str == "ANGLE_CS") return EXT_TYPE::ANGLE_CS;
   return EXT_TYPE::END;
 }
 
@@ -2912,6 +2903,262 @@ void vd_ext_ANGLE2::write_csv() {
 
 
 ////////////////////////////////////////////////
+// EXT_ANGLE_CS
+vd_ext_ANGLE_CS::vd_ext_ANGLE_CS(apf::Mesh2* m_in, cell_base* cb_in, vd_entlist* 
+                               e_list_in, field_calc* f_calc_in, 
+                               std::vector<std::string> & opts_in,
+                               double t_in) : 
+                                e_b0(NULL), e_b1(NULL), e_j(NULL), ang_tol(1e-1), 
+                                dist_tol(1e-5),
+                                angle(0.), P(0,0,0), N(0,0,0), 
+                                OUTPUTANGLE("") {
+  m = m_in;
+  cb = cb_in;
+  e_list = e_list_in;
+  f_calc = f_calc_in;
+
+  t_curr = t_in;
+
+  parse_opt(opts_in);
+  write_csv();
+}
+
+// Given a set of entities of same dim, find the entity intersected by the plane.
+apf::MeshEntity* vd_ext_ANGLE_CS::find_ent(std::vector<apf::MeshEntity*> &ents, apf::Vector3 &l_dir, apf::Vector3 &l_pos) {
+  assert(ents.size() > 0);
+  int e_type = m->getType(ents.at(0));
+  int e_dim = m->typeDimension[e_type];
+
+  for(int i = 0; i < ents.size(); i++) {
+    if(pl_int_tri_line(m, ents.at(i), P, N, l_dir, l_pos, dist_tol)) {
+      return ents.at(i);
+    }
+  }
+  return NULL;
+}
+
+// Find the tet intersection with the plane, specifically an intersectiong 3-
+// stratum triangle.
+bool vd_ext_ANGLE_CS::pl_int_tri_bound_line(apf::Mesh2* m, apf::MeshEntity* tet, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos) {
+  std::vector<apf::MeshEntity*> t_b(0);
+  vd_set_down(m, tet, &t_b);
+
+  for(int i = 0; i < 4; i++) {
+    int c_type = m->getModelType(m->toModel(t_b.at(i))); 
+    if(c_type == 3 and pl_int_tri_line(m, t_b.at(i), p_pos, p_norm, l_dir, l_pos, dist_tol)) {
+      l_pos = vd_get_pos(m, t_b.at(i));
+      return true;
+    }
+  }
+  return false;
+}
+
+void vd_ext_ANGLE_CS::parse_opt(std::vector<std::string> &opts) {
+  assert(opts.size() == 8);
+  OUTPUTANGLE = opts.at(1);
+
+  s3 = std::stoi(opts.at(2)) - 1;
+
+  std::string temp("");
+  std::string::size_type sz;
+
+  // Joint stratum
+  sz = 0;
+  temp = opts.at(3);
+  temp = temp.substr(sz);
+  dj = std::stoi(temp, &sz);
+  temp = temp.substr(sz);
+  sj = std::stoi(temp, &sz) - 1;
+
+  // Bounding stratum 0
+  sz = 0;
+  temp = opts.at(4);
+  temp = temp.substr(sz);
+  db0 = std::stoi(temp, &sz);
+  temp = temp.substr(sz);
+  sb0 = std::stoi(temp, &sz) - 1;
+
+  // Bounding stratum 1
+  sz = 0;
+  temp = opts.at(5);
+  temp = temp.substr(sz);
+  db1 = std::stoi(temp, &sz);
+  temp = temp.substr(sz);
+  sb1 = std::stoi(temp, &sz) - 1;
+
+  // Point on plane
+  sz = 0;
+  temp = opts.at(6);
+  temp = temp.substr(sz);
+  P[0] = std::stod(temp, &sz);
+  temp = temp.substr(sz);
+  P[1] = std::stod(temp, &sz);
+  temp = temp.substr(sz);
+  P[2] = std::stod(temp, &sz);
+
+  // Point on plane
+  sz = 0;
+  temp = opts.at(7);
+  temp = temp.substr(sz);
+  N[0] = std::stod(temp, &sz);
+  temp = temp.substr(sz);
+  N[1] = std::stod(temp, &sz);
+  temp = temp.substr(sz);
+  N[2] = std::stod(temp, &sz);
+
+  assert(e_list->e.at(dj).at(sj).at(dj).size() > 0);
+  ent_conn e_s;
+  cb->get_conn_dim(dj, 3, s3, &e_s);
+  assert(e_s.chk_ent(sj));
+  cb->get_conn_dim(db0, 3, s3, &e_s);
+  assert(e_s.chk_ent(sb0));
+  cb->get_conn_dim(db1, 3, s3, &e_s);
+  assert(e_s.chk_ent(sb1));
+
+  e_j = NULL;
+  e_b0 = NULL;
+  e_b1 = NULL;
+
+  apf::Vector3 pos_j(0,0,0);
+  apf::Vector3 pos_s3(0,0,0);
+  apf::Vector3 pos_temp(0,0,0);
+  apf::Vector3 dir_b_0(0,0,0);
+  apf::Vector3 dir_b_1(0,0,0);
+
+  std::vector<apf::MeshEntity*> verts(0);
+  std::vector<apf::MeshEntity*> edges(0);
+  std::vector<apf::MeshEntity*> tris(0);
+  std::vector<apf::MeshEntity*> tris_b(0);
+  std::vector<apf::MeshEntity*> tets(0);
+
+  // Junction is a 1-stratum
+  if(dj == 1) {
+    for(int i = 0; i < e_list->e.at(dj).at(sj).at(dj).size(); i++) {
+      apf::MeshEntity* e_curr = e_list->e.at(dj).at(sj).at(dj).at(i);
+      if(pl_int_edge(m, e_curr, P, N))
+        e_j = e_curr;
+    }
+    pos_j = vd_get_pos(m, e_j);
+    //std::vector<apf::MeshEntity*> * edges = &e_list->e.at(1).at(s1-1).at(1);
+    vd_set_up(m, e_j, &tris);
+    vd_set_up(m, &tris, &tets);
+    vd_ext_ent_geom(m, &tets, &tris_b, s3 + 1);
+
+    bool found = false;
+    for(int i = 0; i < tris_b.size(); i++) {
+      if(found = pl_int_tri_bound_line(m, tris_b.at(i), P, N, dir_b_0, pos_s3)) {
+        i = tris_b.size();
+      }
+    }
+    vd_ext_ent_geom(m, &tris, &tris_b, sb0 + 1);
+    e_b0 = find_ent(tris_b, dir_b_0, pos_temp);
+    if(!e_b0)
+      found = false;
+    vd_ext_ent_geom(m, &tris, &tris_b, sb1 + 1);
+    e_b1 = find_ent(tris_b, dir_b_1, pos_temp);
+    if(!e_b1)
+      found = false;
+
+    if(!found) {
+      vd_set_down(m, e_j, &verts);
+      vd_set_up(m, &verts, &edges);
+      vd_set_up(m, &edges, &tris);
+      vd_set_up(m, &tris, &tets);
+      vd_ext_ent_geom(m, &tets, &tris_b, s3 + 1);
+
+      found = false;
+      for(int i = 0; i < tris_b.size(); i++) {
+        if(found = pl_int_tri_bound_line(m, tris_b.at(i), P, N, dir_b_0, pos_s3)) {
+          i = tris_b.size();
+        }
+      }
+      assert(found);
+    }
+
+    vd_ext_ent_geom(m, &tris, &tris_b, sb0 + 1);
+    e_b0 = find_ent(tris_b, dir_b_0, pos_temp);
+    assert(e_b0);
+    if((pos_temp - pos_j)*dir_b_0 < - std::numeric_limits<double>::min())
+      dir_b_0 = dir_b_0*(-1);
+
+    vd_ext_ent_geom(m, &tris, &tris_b, sb1 + 1);
+    e_b1 = find_ent(tris_b, dir_b_1, pos_temp);
+    assert(e_b1);
+
+    if((pos_temp - pos_j)*dir_b_1 < - std::numeric_limits<double>::min())
+      dir_b_1 = dir_b_1*(-1);
+  }
+  // Junction is a 0-stratum
+  else {
+    assert(dj == 0);
+    e_j = e_list->e.at(dj).at(sj).at(dj).at(0);
+
+    pos_j = vd_get_pos(m, e_j);
+    P = pos_j;
+
+    vd_set_up(m, e_j, &edges);
+    vd_set_up(m, &edges, &tris);
+    vd_set_up(m, &tris, &tets);
+
+    // Find an adjacent tetrahedron
+    vd_ext_ent_geom(m, &tets, &tris_b, s3 + 1);
+    bool found = false;
+    for(int i = 0; i < tets.size(); i++) {
+      if(found = pl_int_tri_bound_line(m, tris_b.at(i), P, N, dir_b_0, pos_s3)) {
+        i = tets.size();
+      }
+    }
+    assert(found);
+    // Boundary is a 1-stratum
+    if(db0 == 1) {
+      vd_ext_ent_geom(m, &edges, &tris_b, sb0 + 1);
+      assert(tris_b.size() == 1);
+      e_b0 = tris_b.at(0);
+      dir_b_0 = norm_0(vd_get_pos(m, e_b0) - pos_j);
+    }
+    // Boundary is a 2-stratum
+    else {
+      vd_ext_ent_geom(m, &tris, &tris_b, sb0 + 1);
+      e_b0 = find_ent(tris_b, dir_b_0, pos_temp);
+      assert(e_b0);
+      if((pos_temp - pos_j)*dir_b_0 < - std::numeric_limits<double>::min())
+        dir_b_0 = dir_b_0*(-1);
+    }
+
+    // Boundary is a 1-stratum
+    if(db1 == 1) {
+      vd_ext_ent_geom(m, &edges, &tris_b, sb1 + 1);
+      assert(tris_b.size() == 1);
+      e_b1 = tris_b.at(0);
+      dir_b_1 = norm_0(vd_get_pos(m, e_b1) - pos_j);
+    }
+    // Boundary is a 2-stratum
+    else {
+      vd_ext_ent_geom(m, &tris, &tris_b, sb1 + 1);
+      e_b1 = find_ent(tris_b, dir_b_1, pos_temp);
+      assert(e_b1);
+      if((pos_temp - pos_j)*dir_b_1 < - std::numeric_limits<double>::min())
+        dir_b_1 = dir_b_1*(-1);
+    }
+  }
+  // Project pos_s3 on the plane.
+  pos_s3 = pos_s3 - pos_j;
+  pos_temp = norm_0(vd_cross(dir_b_0, dir_b_1));
+  pos_s3 = norm_0(pos_s3 - pos_temp*(pos_temp*pos_s3));
+  angle = vd_int_angle_n(pos_s3, dir_b_0, dir_b_1, ang_tol);
+}
+
+void vd_ext_ANGLE_CS::write_csv() {
+  csvfile csvANGLE(OUTPUTANGLE);
+
+  csvANGLE << t_curr;
+  csvANGLE << angle;
+  csvANGLE << endrow;
+}
+
+////////////////////////////////////////////////
 
 double ext_ppa(apf::Mesh2* m, vd_entlist* e_list, std::vector<int>& s2_id) {
   double A_tot = 0.;
@@ -3195,6 +3442,12 @@ void vd_ext_CRV::parse_opt(std::vector<std::string> &opts) {
   std::vector<apf::MeshEntity*>* v_2c = &e_list->e.at(2).at(cell_2).at(0);
   std::vector<apf::MeshEntity*>* t_2c = &e_list->e.at(2).at(cell_2).at(2);
 
+  std::vector<apf::MeshEntity*> e_temp(0);
+  std::vector<apf::MeshEntity*> v_temp(0);
+
+  vd_set_down(m, t_2c, &e_temp);
+  vd_set_down(m, &e_temp, &v_temp);
+
   // In order to calculate area weighted quantities defined at vertices, 
   // count number of adjacent triangles for the boundary vertices.
   apf::Downward d_v;
@@ -3208,6 +3461,19 @@ void vd_ext_CRV::parse_opt(std::vector<std::string> &opts) {
   apf::Vector3 rad(0,0,0);
   apf::Vector3 vel(0,0,0);
 
+  for(int i = 0; i < v_temp.size(); i++) {
+    double curv_curr = vd_mean_curv(m, v_temp.at(i), cell_3);
+    apf::setScalar(curv_field, v_temp.at(i), 0, curv_curr);
+    m->getPoint(v_temp.at(i), 0, rad);
+    rad = rad - o;
+    double r_curr = rad.getLength();
+    apf::setScalar(rad_field, v_temp.at(i), 0, r_curr);
+    apf::getVector(vel_field, v_temp.at(i), 0, vel);
+    double v_curr = rad*vel;
+    apf::setScalar(vel_r_field, v_temp.at(i), 0, v_curr);
+    apf::setScalar(area_field, v_temp.at(i), 0, 0);
+  }
+/*
   for(int i = 0; i < v_2c->size(); i++) {
     double curv_curr = vd_mean_curv(m, v_2c->at(i), cell_3);
     apf::setScalar(curv_field, v_2c->at(i), 0, curv_curr);
@@ -3238,6 +3504,7 @@ void vd_ext_CRV::parse_opt(std::vector<std::string> &opts) {
       apf::setScalar(area_field, v_1c->at(j), 0, 0);
     }
   }
+*/
 }
 
 void vd_ext_CRV::write_csv() {
@@ -3262,6 +3529,8 @@ void vd_ext_CRV::write_csv() {
       double v_curr = apf::getScalar(vel_r_field, d_v[j], 0);
       //double curv_curr = apf::getScalar(curv_field, d_v[j], 0);
       double rad_curr = apf::getScalar(rad_field, d_v[j], 0);
+      //vd_print_ent(m, d_v[j]);
+      //std::cout << "\tr: " << rad_curr << std::endl;
       vel_w = vel_w + a_curr*v_curr;
       r_w = r_w + a_curr*rad_curr;
     }
@@ -3332,6 +3601,8 @@ void vd_ext_POS_D::parse_opt(std::vector<std::string> &opts) {
   o[1] = std::stod(temp, &sz);
   temp = temp.substr(sz);
   o[2] = std::stod(temp, &sz);
+
+  sz = 0;
   temp = opts.at(5);
   dir[0] = std::stod(temp, &sz);
   temp = temp.substr(sz);
@@ -3842,6 +4113,9 @@ void vd_ext_inf::write_csv() {
     }
     else if(et_curr == EXT_TYPE::ANGLE2) {
       vd_ext_ANGLE2 ext_ANGLE(m, cb, e_list, f_calc, opts.at(i), t_curr);
+    }
+    else if(et_curr == EXT_TYPE::ANGLE_CS) {
+      vd_ext_ANGLE_CS ext_ANGLE(m, cb, e_list, f_calc, opts.at(i), t_curr);
     }
     else if(et_curr == EXT_TYPE::HAUSDORFF) {
       vd_ext_HAUSDORFF ext_HAUSDORFF(m, cb, e_list, f_calc, opts.at(i), t_curr);

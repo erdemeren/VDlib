@@ -138,8 +138,6 @@ int tri_single_2c [16] =  {0, 1, 1, 0,
                            1, 0, 0, 1, 
                            0, 0, 0, 0,
                            0, 0, 0, 0};
-// TODO Why did the sum not add up to 15?
-// int tri_split_shift [4] = {1, 1, 2, 5};
 int tri_split_shift [4] = {1, 2, 4, 8};
 
 // Similar to tri split type, used to identify which edge to use to determine 
@@ -368,8 +366,8 @@ void vd_sim::iter_step() {
 
 // Move only a select set of boundaries. Mainly used to circumnavigate the  
 // gsl memory issue for large meshes. 
-// TODO Better incorporate into the overall code structure. Ideally, have an input
-// interface for every option including the way motion is handled.
+// TODO Better incorporate into the overall code structure. Ideally, have an 
+// input interface for every option including the way motion is handled.
 void vd_sim::iter_cells() {
 
   double iter_time = time_curr;
@@ -939,7 +937,8 @@ double vd_sim::shr_cell(int cell_dim, int cell_id, double sp_size) {
 // Check if the cell is still shrinking after shrinking slightly. 
 // TODO, a more stable time iteration scheme could be used instead. 
 bool vd_sim::chk_cell_shr(int cell_dim, int cell_id) {
-
+  // TODO this check could be more efficient if it considers only vertices 
+  // associated with the stratum in question.
   assert(!check_ma_sgn());
   double sp_size = 0.1;
   //assert(sp_size < 1);
@@ -1038,6 +1037,16 @@ bool vd_sim::chk_cell_shr(int cell_dim, int cell_id) {
   }
 }
 
+void vd_sim::set_glens_param(vd_glens& g_lens) {
+  g_lens.set_field_calc(&f_calc);
+  g_lens.turn_save_vtk(sub_vtk);
+}
+
+void vd_sim::set_glens_trial_param(vd_glens_trial& g_trial, bool precond_flag) {
+  g_trial.set_precond(precond_flag);
+  g_trial.set_verify(false);
+}
+
 // Collapse a cell given in gmi notation.
 std::pair<int, int> vd_sim::col_cell(int cell_dim, int cell_id) {
   // First, get the list of the 0cells that require their path and circuit lists
@@ -1110,7 +1119,7 @@ std::pair<int, int> vd_sim::col_cell(int cell_dim, int cell_id) {
       apf::destroyField(field_step);
 
       vd_glens g_lens2(m, c_base, &e_list);
-      g_lens2.set_field_calc(&f_calc);
+      set_glens_param(g_lens2);
       bool precond_flag = g_lens2.chk_precond(cell_dim, cell_id);
       if(high_q or !precond_flag) {
 
@@ -1129,8 +1138,7 @@ std::pair<int, int> vd_sim::col_cell(int cell_dim, int cell_id) {
           }
 
           vd_glens_trial g_trial(m, c_base, &e_list, &f_calc);
-          g_trial.set_precond(precond_flag);
-          g_trial.set_verify(false);
+          set_glens_trial_param(g_trial, precond_flag);
           tag_cell = g_trial.coll_cell(cell_dim, cell_id);
 
           //tag_cell = g_lens2.col_cell(cell_dim, cell_id);
@@ -1153,8 +1161,8 @@ std::pair<int, int> vd_sim::col_cell(int cell_dim, int cell_id) {
           if(!skipped) {
             //c_base->print_ent();
 
-            // TODO when doing things in parallel, the correct thing is to apply the 
-            // topological modifications at this level.
+            // TODO when doing things in parallel, the correct thing is to 
+            // apply the topological modifications at this level.
             f_calc.vd_att_fields(m);
 
             for (int i = 0; i < e_0cell.conn.size(); i++) {
@@ -1471,6 +1479,7 @@ double vd_sim::dist_3c_min(apf::MeshEntity* vert) {
 // Try inserting cells around the given 0cell. For the isentropic case, it also
 // checks for the Euler characteristic.
 bool vd_sim::ins_cell(int tag_0cell) {
+  // TODO this check could be more efficient if it only considers the vertex.
   assert(!check_ma_sgn());
 
   if(!ins_flag)
@@ -1484,11 +1493,8 @@ bool vd_sim::ins_cell(int tag_0cell) {
 
   bool ins_res = false;
   vd_edisc* e_d = new vd_edisc(get_mesh(), get_c_base(), &e_list);
-  //f_calc.dummy_func_stop();
-  e_d->set_proj((PROJ_TYPE)proj_flag);
+  set_edisc_param(e_d);
 
-  e_d->set_vdpar(f_calc.vdparam);
-  e_d->set_field_calc(f_calc);
   //get_c_ins()->print_graph();
 
   int c0_sz = c_base->get_sz(0);
@@ -1693,9 +1699,6 @@ bool vd_sim::ins_cell(int tag_0cell) {
               min_cell.at(dim_low - 1) = r_equi;
           }
         }
-
-        //comp_mesh_topo();
-
         m->verify();
 
         //assert(!c_base->chk_spur(new_cell.first, new_cell.second-1));
@@ -1715,6 +1718,16 @@ bool vd_sim::ins_cell(int tag_0cell) {
 
   delete e_d;
   return ins_res;
+}
+
+// Transfer the simulation parameters to the vd_edisc object.
+void vd_sim::set_edisc_param(vd_edisc* e_d) {
+  e_d->set_proj((PROJ_TYPE)proj_flag);
+
+  e_d->set_vdpar(f_calc.vdparam);
+  e_d->set_field_calc(f_calc);
+  e_d->set_sub_vtk_flag(sub_vtk);
+  e_d->set_verbose_flag(ed_verb_flag);
 }
 
 bool vd_sim::insertible(int tag_0cell) {
@@ -1769,7 +1782,7 @@ vd_sim::vd_sim() :
   //c_ins(), 
   m(NULL), c_base(NULL), 
   mesh_flag(false), load_flag(false), first_time(true),
-  save_mov(false), ins_flag(true), 
+  save_mov(false), sub_vtk(true), ins_flag(true), ed_verb_flag(false), 
   col_flag(true), extract_flag(false), 
   //outputMS("./MS.csv"),
   //outputROC("./ROC.csv"),
@@ -1862,7 +1875,6 @@ void vd_sim::set_mesh(const char* modelFile) {
   save_vtk_name("./output/mesh_created");
 
   f_calc.reload_cb(c_base);
-  //comp_mesh_topo();
   //sync_cins();
   //g_lens = new vd_glens(m, c_base);
 
@@ -1877,6 +1889,8 @@ void vd_sim::set_mesh(const char* modelFile) {
 
   sim_sz = std::cbrt(vd_tot_volm(m));
   first_time = false;
+
+  get_length_scale();
 }
 
 void vd_sim::set_mesh(const char* modelFile, const char* meshFile) {
@@ -1901,8 +1915,6 @@ void vd_sim::set_mesh(const char* modelFile, const char* meshFile) {
 
   f_calc.reload_cb(c_base);
 
-  //comp_mesh_topo();
-
   //sync_cins();
   //c_ins.load_cb(c_base);
   //g_lens = new vd_glens(m, c_base);
@@ -1920,9 +1932,10 @@ void vd_sim::set_mesh(const char* modelFile, const char* meshFile) {
   sim_sz = std::cbrt(vd_tot_volm(m));
   first_time = false;
 
+  get_length_scale();
 }
 
-// TODO not complient with the above function.
+// TODO not compliant with the above function.
 void vd_sim::set_mesh_smb(const char* modelFile, const char* meshFile) {
 
   if (load_flag) {
@@ -1947,8 +1960,6 @@ void vd_sim::set_mesh_smb(const char* modelFile, const char* meshFile) {
   save_vtk_name("./output/mesh_loaded");
   f_calc.reload_cb(c_base);
 
-  //comp_mesh_topo();
-
   //sync_cins();
   //c_ins.load_cb(c_base);
   //g_lens = new vd_glens(m, c_base);
@@ -1964,6 +1975,8 @@ void vd_sim::set_mesh_smb(const char* modelFile, const char* meshFile) {
 
   sim_sz = std::cbrt(vd_tot_volm(m));
   first_time = false;
+
+  get_length_scale();
 
 }
 
@@ -2211,6 +2224,10 @@ void vd_sim::start_sim() {
   chk_ma_swap(m);
   f_calc.vd_att_fields(m);
 
+  if(ad_flag) {
+    adapt();
+  }
+
   tag_0cell_ins.reserve(c_base->get_sz(0));
 
   //corr_1cell();
@@ -2250,6 +2267,10 @@ void vd_sim::start_sim() {
 
       if(ad_flag) {
         adapt();
+        // TODO This was a sanity check to identify that it was indeed 
+        // meshAdapt that was introducing bad elements after starting with 
+        // mesh generated by SCOREC using a tess file. It is potentially 
+        // spurious now.
         assert(!check_ma_sgn());
       }
 
@@ -2367,7 +2388,9 @@ void vd_sim::start_sim() {
               adapt();
             }
             e_list.refresh();
-            save_vtk_name("output/after_adapt_col");
+
+            if(sub_vtk)
+              save_vtk_name("output/after_adapt_col");
             chk_ma_swap(m);
           }
           // Assume collapse fixes spurious entities already.
@@ -2443,6 +2466,10 @@ void vd_sim::start_sim() {
       write_time_cost();
     }
   }
+  if(save_mov)
+    save_vtk_mov();
+  else
+    save_vtk();
   if(cost_t_accum) {
     write_time_cost();
   }
@@ -2518,9 +2545,6 @@ void vd_sim::reload_mesh() {
 
   if (load_flag) {
 
-    //vd_print_ent(m);
-    //comp_mesh_topo();
-
     c_base->vd_write_dmg("./temp_save.dmg");
     m->writeNative("./temp_save.smb");
 
@@ -2535,8 +2559,8 @@ void vd_sim::reload_mesh() {
 
 }
 
-// Return true if the model object and the cell_base object are consistent. 
-bool vd_sim::comp_mesh_topo() {
+// Print the model object. 
+void vd_sim::print_mesh_topo() {
 
   struct gmi_model* mdl = m->getModel();
 
@@ -2573,7 +2597,6 @@ bool vd_sim::comp_mesh_topo() {
   }
 
   c_base->print_ent();
-
 }
 
 void vd_sim::set_save_vtk_interval(double dt_period_in) {
@@ -2638,6 +2661,8 @@ void vd_sim::save_vtk() {
 }
 
 // Generates a vtk per grain. Used in generating movies in a hackish way.
+// TODO this can be safely discarded now that Paraview python interface allows
+// selection of individual grains.
 void vd_sim::save_vtk_mov() {
 
   vd_rem_tag(m);
@@ -2736,7 +2761,8 @@ std::pair<double,double> vd_sim::get_length_scale() {
     assert(ad_type == ADAPT_TYPE::ADAPT_3CELL or
            ad_type == ADAPT_TYPE::ADAPT_STEP or
            ad_type == ADAPT_TYPE::ADAPT_STEP_1CELL or
-           ad_type == ADAPT_TYPE::ADAPT_BOUND);
+           ad_type == ADAPT_TYPE::ADAPT_BOUND or
+           ad_type == ADAPT_TYPE::ADAPT_CURVE);
 
     //return adapt_len*std::cbrt(avg_cell.at(2))
     //                  /ad_param/ma::getAverageEdgeLength(m);
@@ -2922,6 +2948,8 @@ void vd_sim::adapt_mark_step() {
   m->end(it);
 
 }
+
+
 
 // In addition to stepwise graded adaptation, mark the vertices connected to 1c
 // vertices such that the minimum 1c has two edges and the surrounding edges 
@@ -3188,6 +3216,140 @@ void vd_sim::adapt_mark_0c_min() {
   }
   delete e_0c;
 */
+}
+
+// Curvature based mesh refinement, mark the vertices.
+// Top-down calculation, should be efficient.
+// H_i = 1/2*sum_{j in N_i} cot(alpha_ij) + cot(beta_ij)(len e_j)
+// where Ni is set of edges adjacent to vertex i, alpha_ij and beta_ij are the 
+// angles of the surface triangles adjcent to edge j, across the edge j.
+// Loop over surface triangles, calculate the interior angles, add the cot(angle) 
+// to the field_cot on the edge. 
+// Loop over the edges, 
+// if edge belongs to 2-stratum: add 1/2 of field_cot*len_e to the vertex
+// if edge belongs to 1-stratum: add 1/2n of field_cot*len_e to the vertex, where
+// n is the number of adjacent 3-strata of the vertex.
+void vd_sim::adapt_mark_curv() {
+  int lookup_tri_ed [3][2] = {{2,0},{0,1},{1,2}};
+
+  apf::Field* field_step = vd_att_vs_field(m, "adapt_step");
+  apf::Field* field_curv = vd_att_vs_field(m, "curv_mean");
+  apf::Field* field_cot = vd_att_es_field(m, "cot_field");
+
+  apf::ModelEntity* mdl;
+  apf::Downward d_v;
+  apf::Downward d_e;
+
+  std::vector<double> ang(3, 0.);
+  //std::vector<apf::vector3> (3, apf::Vector3(0,0,0));
+  apf::Vector3 temp_pos(0,0,0);
+
+  double ref_len = get_adapt_ln();
+  std::cout << "ref_len " << ref_len << " bound_len " << bound_len << std::endl;
+
+  double e_weight = 1./ref_len;
+  double b_weight = 1./bound_len;
+  apf::MeshEntity* e;
+
+  apf::MeshIterator* it = m->begin(0);
+  while ((e = m->iterate(it))) {
+    apf::setScalar(field_step, e, 0, e_weight);
+    apf::setScalar(field_curv, e, 0, 0.);
+  }
+  m->end(it);
+
+  std::map<apf::MeshEntity*, apf::Vector3> ori_map{};
+  std::map<apf::MeshEntity*, apf::Vector3> pos_map{};
+
+  for(int dim = 1; dim < 3; dim++) {
+    int sz = c_base->get_sz(dim);
+    for(int c_id = 0; c_id < sz; c_id++) {
+      if(!c_base->is_free(dim, c_id)) {
+        std::vector<apf::MeshEntity*>* ents = &e_list.e.at(dim).at(c_id).at(1);
+        for(int i = 0; i < ents->size(); i++) {
+          ori_map[ents->at(i)] = get_edge_dir(m, ents->at(i));
+          pos_map[ents->at(i)] = vd_get_pos(m, ents->at(i));
+        }
+      }
+    }
+  }
+
+  it = m->begin(2);
+  while ((e = m->iterate(it))) {
+    if(m->getModelType(m->toModel(e)) == 2) {
+      m->getDownward(e, 0, d_v);
+      m->getDownward(e, 1, d_e);
+
+      for(int v1 = 0; v1 < 3; v1++) {
+        int e1 = lookup_tri_ed[v1][0];
+        int e2 = lookup_tri_ed[v1][1];
+
+        m->getPoint(d_v[v1], 0, temp_pos);
+
+        double coef = 1.;
+        temp_pos = norm_0(pos_map[d_e[e1]] - temp_pos);
+        if(temp_pos*ori_map[d_e[e1]] < -std::numeric_limits<double>::min())
+          coef = -coef;
+        temp_pos = norm_0(pos_map[d_e[e2]] - temp_pos);
+        if(temp_pos*ori_map[d_e[e2]] < -std::numeric_limits<double>::min())
+          coef = -coef;
+        double ang_cos = ori_map[d_e[e2]]*ori_map[d_e[e1]]*coef;
+
+        double ang_curr = std::acos(std::min(std::max(ang_cos,-1.0),1.0));
+        double ang_sin = std::sin(ang_curr);
+
+        if(std::fabs(ang_sin) > std::numeric_limits<double>::min()) { 
+          e1 = 3 - e1 + e2;
+          double cot_curr = apf::getScalar(field_cot, d_e[e1], 0);
+          apf::setScalar(field_cot, d_e[e1], 0, cot_curr + ang_cos/ang_sin);
+        }
+      }
+    }
+  }
+  m->end(it);
+
+  for(int dim = 1; dim < 3; dim++) {
+    int sz = c_base->get_sz(dim);
+    for(int c_id = 0; c_id < sz; c_id++) {
+      if(!c_base->is_free(1, c_id)) {
+        std::vector<apf::MeshEntity*>* ents = &e_list.e.at(dim).at(c_id).at(1);
+
+        for(int i = 0; i < ents->size(); i++) {
+          apf::MeshEntity* e_curr = ents->at(i);
+          m->getDownward(e_curr, 0, d_v);
+          double len = vd_meas_ent(m, e_curr);
+          double cot_curr = apf::getScalar(field_cot, e_curr, 0);
+          double curv_mean = apf::getScalar(field_curv, d_v[0], 0);
+
+          apf::setScalar(field_curv, d_v[0], 0, curv_mean + cot_curr*len);
+        }
+      }
+    }
+  }
+
+  for(int dim = 0; dim < 3; dim++) {
+    int sz = c_base->get_sz(dim);
+    for(int c_id = 0; c_id < sz; c_id++) {
+      if(!c_base->is_free(dim, c_id)) {
+
+        ent_conn* eup = new ent_conn();
+        c_base->get_conn_dim(3, 1, c_id, eup);
+        int n = eup->conn.size();
+        delete eup;
+
+        std::vector<apf::MeshEntity*>* ents = &e_list.e.at(dim).at(c_id).at(0);
+        for(int i = 0; i < ents->size(); i++) {
+          double curv_mean = apf::getScalar(field_curv, d_v[0], 0);
+          if(n/curv_mean > ref_len)
+            apf::setScalar(field_step, d_v[0], 0, n/curv_mean);
+        }
+      }
+    }
+  }
+  apf::destroyField(field_cot);
+
+  if(sub_vtk)
+    save_vtk_name("./output/after_curv");
 }
 
 
@@ -3837,7 +3999,9 @@ void vd_sim::adapt_coarsen_cell(int cell_dim, int cell_id) {
   double t1 = PCU_Time();
   dt_adapt = dt_adapt + (t1 - t0);
 
-  save_vtk_name("./output/adapt_coarsen");
+
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_coarsen");
 
   apf::destroyField(field_step);
   e_list.refresh();
@@ -3894,7 +4058,8 @@ void vd_sim::adapt_prob_edge(std::vector<apf::MeshEntity*> &tet) {
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob");
 
 }
 
@@ -3944,7 +4109,8 @@ void vd_sim::adapt_prob_edge_all(std::vector<apf::MeshEntity*> &tet) {
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob_all");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_all");
 
 }
 
@@ -4011,10 +4177,172 @@ void vd_sim::adapt_prob_edge_low(std::vector<apf::MeshEntity*> &tet) {
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob_low");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_low");
 
 }
 
+void vd_sim::adapt_prob_edge_sp_col(std::vector<apf::MeshEntity*> &tet) {
+  apf::Up up;
+  apf::Downward d_s;
+  apf::Downward d_e;
+  apf::Downward d_e3;
+  apf::Downward d_e4;
+  apf::Downward d_v;
+
+  apf::Field* field_step = vd_att_vs_field(m, "adapt_step");
+  double adapt_ln = get_adapt_ln();
+  double m_len =  min_cell.at(0)*2;
+  double q_frac = 1.1;
+
+  Step_ns sf(m, adapt_ln);
+  ma::Input* in = ma::configure(m, &sf);
+
+//old solution and mix of this one
+  // Use a different sizefield to split each 1stratum into two edges 
+  // at least.
+  // Doing only this causes time step issues. The quality of elements 
+  // at the boundaries should be high. 
+  repl_sz_field(in, m, MA_SIZE_TYPE::EDGE_SPLIT);
+
+  std::vector<apf::MeshEntity*> tets_v(0);
+  std::vector<apf::MeshEntity*> verts(0);
+  std::vector<apf::MeshEntity*> edges(0);
+  vd_set_down(m, &tet, &verts, 3);
+
+  ModelEdgeSplit* ref_0c = (ModelEdgeSplit*) in->sizeField;
+
+  //for(int i = 0; i < edges.size(); i++)
+  //  ref_0c->split_map[edges.at(i)] = true;
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+
+  std::map<apf::MeshEntity*, apf::MeshEntity*> tri_tet_map{};
+  std::map<apf::MeshEntity*, int> tet_neigh_nbr{};
+  for(int i = 0; i < tet.size(); i++) {
+    m->getDownward(tet.at(i), 2, d_s);
+    for(int j = 0; j < 4; j++) {
+      if(!tri_tet_map[d_s[j]]) {
+        tri_tet_map[d_s[j]] = tet.at(i);
+      }
+      else {
+        tet_neigh_nbr[tri_tet_map[d_s[j]]] = 
+                                 tet_neigh_nbr[tri_tet_map[d_s[j]]] + 1;
+        tet_neigh_nbr[tet.at(i)] = tet_neigh_nbr[tet.at(i)] + 1;
+      }
+    }
+  }
+  int zero_tet = 0;
+  int sing_tet = 0;
+  for(int i = 0; i < tet.size() - zero_tet; i++) {
+    if(tet_neigh_nbr[tet.at(i)] == 0) {
+      apf::MeshEntity* temp = tet.at(i);
+      int subs_id = tet.size() - zero_tet - 1;
+      tet.at(i) = tet.at(subs_id);
+      tet.at(subs_id) = temp;
+      zero_tet = zero_tet + 1;
+      i = i - 1;
+    }
+  }
+
+  for(int i = 0; i < tet.size() - zero_tet - sing_tet; i++) {
+    if(tet_neigh_nbr[tet.at(i)] == 1) {
+      apf::MeshEntity* temp = tet.at(i);
+      int subs_id = tet.size() - zero_tet - sing_tet - 1;
+      tet.at(i) = tet.at(subs_id);
+      tet.at(subs_id) = temp;
+      sing_tet = sing_tet + 1;
+      i = i - 1;
+    }
+  }
+
+  // Sort edges by length. Starting from the shortest edge, try until one the 
+  // first edge can be collapsed.
+  std::map<int, bool> map_col_id{};
+  std::map<apf::MeshEntity*, bool> map_col{};
+  std::map<apf::MeshEntity*, apf::MeshEntity*> map_sur{};
+
+  std::pair<bool, bool> valid(false, false);
+  for(int i = tet.size() - zero_tet; i < tet.size(); i++) {
+    if(map_col_id[i] ) {
+    }
+    else {
+      valid = vd_col_edge_tet(m, c_base, tet.at(i), map_sur, map_col, &f_calc, true);
+      if(valid.second)
+        break;
+      if(valid.first) {
+        map_col_id[i] = true;
+        for(int j = 0; j < i; j++) {
+          if(map_sur[tet.at(j)]) {
+            tet.at(j) = map_sur[tet.at(j)];
+          }
+          if(map_col[tet.at(j)]) {
+            map_col_id[j] = true;
+          }
+        }
+        map_sur.clear();
+        map_col.clear();
+      }
+    }
+  }
+  if(valid.second)
+    tet.clear();
+  else {
+    tet.resize(tet.size() - zero_tet);
+    valid = std::pair<bool, bool>(false, false);
+
+    for(int i = 0; i < tet.size(); i++) {
+      if(map_col_id[i] ) {
+
+      }
+      else {
+        valid = vd_col_edge_tet(m, c_base, tet.at(i), map_sur, map_col, &f_calc, true);
+        if(valid.second)
+          break;
+        if(valid.first) {
+          map_col_id[i] = true;
+          for(int j = 0; j < i; j++) {
+            if(map_sur[tet.at(j)]) {
+              tet.at(j) = map_sur[tet.at(j)];
+            }
+            if(map_col[tet.at(j)]) {
+              map_col_id[j] = true;
+            }
+          }
+          map_sur.clear();
+          map_col.clear();
+          break;
+        }
+      }
+    }
+  }
+
+  in->shouldRunPreZoltan = false;
+  in->shouldRunMidParma = false;
+  in->shouldRunPostParma = false;
+  in->shouldRefineLayer = true;
+
+  in->shouldCoarsen = false;
+  in->shouldCoarsenLayer = false;
+
+  in->shouldFixShape = false;
+  in->maximumEdgeRatio = 12;
+  in->maximumIterations = 1;
+
+  double t0 = PCU_Time();
+  ma::adapt(in);
+  double t1 = PCU_Time();
+  dt_adapt = dt_adapt + (t1 - t0);
+
+  apf::Field* a_f = m->findField("adapt_step");
+  if(a_f)
+    apf::destroyField(a_f);
+
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
+}
+// This preconditions problematic low quality tetrahedra that remain un-fixed by
+// the meshadapt.
 // Splitting the edge e1 across the boundary tris doesn't seem to fix things
 // as the tet adjacencies of the triangles bounded by the edge can't be merged
 // with the interior tets obtained after the split. Instead, find the edge
@@ -4046,16 +4374,23 @@ void vd_sim::adapt_prob_edge_sp_bound(std::vector<apf::MeshEntity*> &tet) {
   // at the boundaries should be high. 
   repl_sz_field(in, m, MA_SIZE_TYPE::EDGE_SPLIT);
 
+  std::vector<apf::MeshEntity*> tets_v(0);
   std::vector<apf::MeshEntity*> verts(0);
   std::vector<apf::MeshEntity*> edges(0);
   vd_set_down(m, &tet, &verts, 3);
-  vd_set_up(m, &verts, &edges);
 
   ModelEdgeSplit* ref_0c = (ModelEdgeSplit*) in->sizeField;
 
   //for(int i = 0; i < edges.size(); i++)
   //  ref_0c->split_map[edges.at(i)] = true;
-  vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+
+/*
+Check for tets with a single low quality tet neighbor.
+
+*/
+
 /*
 check triangles first
 If no triangles, check edges
@@ -4080,224 +4415,257 @@ Some of the edges cannot be flipped.
 
 If the above is not satisfied, skip.
 */
+  //m->getDownward(tet.at(0), 1, d_e);
+  //vd_col_edge(m, c_base, d_e[0], &f_calc);
+  //tet.clear();
 
   for(int i = 0; i < tet.size(); i++) {
     int d = 3;
     m->getDownward(tet.at(i), 2, d_s);
     m->getDownward(tet.at(i), 1, d_e);
     int tri_state = 0;
-
-    for(int j = 0; j < 4; j++) {
-      apf::ModelEntity* mdl = m->toModel(d_s[j]);
-      int type_e = m->getModelType(mdl);
-      if(type_e == 2)
-        tri_state = tri_state + tri_split_shift[j];
-    }
-    int e1 = -1;
-    if(tri_split_type[tri_state] == 0) {
-      // Also check for maximum edge length.
-      double l_max = 0;
-      int j_max = -1;
-      for(int j = 0; j < 6; j++) {
-
-        double l_curr = vd_meas_ent(m, d_e[j]);
-        if(l_curr > l_max) {
-          l_max = l_curr;
-          j_max = j;
-        }
-      }
-      if(l_max > m_len and
-         j_max != -1) {
-        e1 = tri_split_map[tri_state];
-      }
-    }
 /*
-    // Single boundary triangle. From the remaining edges, determine the longest 
-    // internal edge. 
-    else if(tri_split_type[tri_state] == 2) {
-      int t1 = tri_split_map[tri_state] - 6;
-      //lookup_tt_e
-      double l_max = 0;
-      int j_max = -1;
-      for(int j = 0; j < 3; j++) {
-        e1 = lookup_t_tet_e_x[t1][j];
-        apf::ModelEntity* mdl = m->toModel(d_e[e1]);
-        int type_e = m->getModelType(mdl);
-        if(type_e == 3) {
-          double l_curr = vd_meas_ent(m, d_e[e1]);
-          if(l_curr > l_max) {
-            l_max = l_curr;
-            j_max = e1;
+    // Check if the given tet has an exterior 2-stratum vertex bounding an 
+    // exterior 2-stratum triangle. 
+    if(apf::MeshEntity* vert_b = get_tet_bound_vert(m, tet.at(i))) {
+    // Check if the tetrahedron lies between two boundary triangles, one belonging
+    // to the exterior. If so, split the boundary vertex bounding the exterior
+    // triangle. TODO this is very prone to crashes if multiple tetrahedra 
+    //if(apf::MeshEntity* tri_2c = get_tet_bound_tri(m, tet.at(i))) {
+    //  apf::MeshEntity* vert_b = get_tri_vert_bound(m, tri_2c);
+      std::vector<apf::MeshEntity*> edge_b(0);
+      std::vector<apf::MeshEntity*> tri_b(0);
+      std::vector<apf::MeshEntity*> tet_b(0);
+
+      vd_set_up(m, vert_b, &edge_b);
+      vd_set_up(m, &edge_b, &tri_b);
+      vd_set_up(m, &tri_b, &tet_b);
+
+      for(int j = 0; j < tet_b.size(); j++) {
+        if(tet_b.at(j) != tet.at(i)) {
+          int j1 = findIn(&tet, tet.size(), tet_b.at(j));
+          if(j1 > i) {
+            tet.at(j1) = tet.back();
+            tet.resize(tet.size() - 1);
           }
         }
       }
-      if(l_max > min_ins_rad*2 and
-         j_max != -1) {
-        e1 = j_max;
-      }
-    }
-    // Single internal triangle. Don't modify.
-    else if(tri_split_type[tri_state] == 1) {
-
+      vd_split_tet_vert(m, c_base, vert_b, NULL);
     }
     else {
-      // Find the longest edge e2. Get the edge across(e1). 
-      // Get the adjacent tris.
-      // Find the edges e3 and e4 across e_i on the tets adjacent to the tris.
-      // Split e2,e3,e4.
-      double l_max = 0;
-      int j_max = -1;
-      for(int j = 0; j < 6; j++) {
-        apf::ModelEntity* mdl = m->toModel(d_e[j]);
+*/
+      for(int j = 0; j < 4; j++) {
+        apf::ModelEntity* mdl = m->toModel(d_s[j]);
         int type_e = m->getModelType(mdl);
-        if(type_e == 3) {
+        if(type_e == 2)
+          tri_state = tri_state + tri_split_shift[j];
+      }
+      int e1 = -1;
+      if(tri_split_type[tri_state] == 0) {
+        // Also check for maximum edge length.
+        double l_max = 0;
+        int j_max = -1;
+        for(int j = 0; j < 6; j++) {
+
           double l_curr = vd_meas_ent(m, d_e[j]);
           if(l_curr > l_max) {
             l_max = l_curr;
             j_max = j;
           }
         }
-      }
-      if(l_max > min_ins_rad*2 and
-         j_max != -1) {
-        e1 = lookup_t_e_x_e[j_max];
-        //e1 = j_max;
-      }
-    }
-*/
-    if(e1 != -1) {
-      m->getDownward(tet.at(i), 0, d_v);
-      int e2 = lookup_t_e_x_e[e1];
-      int t1 = lookup_t_e_n_t[e1][0];
-      int t2 = lookup_t_e_n_t[e1][1];
-
-      // Vertices on the main tet that bound the edge to be split.
-      int v1 = lookup_t_e_n_g[e1][0];
-      int v2 = lookup_t_e_n_g[e1][1];
-
-      apf::MeshEntity* vert_1 = d_v[v1];
-      apf::MeshEntity* vert_2 = d_v[v2];
-
-      // First tri:
-      m->getUp(d_s[t1], up);
-      assert(up.n == 2);
-      apf::MeshEntity* tet_next = up.e[0];
-      if(up.e[0] == tet.at(i))
-        tet_next = up.e[1];
-      m->getDownward(tet_next, 1, d_e3);
-      int e1_next = findIn(d_e3, 6, d_e[e1]);
-      assert(e1_next > -1);
-      int e3 = lookup_t_e_x_e[e1_next];
-
-      // Second tri:
-      m->getUp(d_s[t2], up);
-      assert(up.n == 2);
-      tet_next = up.e[0];
-      if(up.e[0] == tet.at(i))
-        tet_next = up.e[1];
-      m->getDownward(tet_next, 1, d_e4);
-      e1_next = findIn(d_e4, 6, d_e[e1]);
-      assert(e1_next > -1);
-      int e4 = lookup_t_e_x_e[e1_next];
-/*
-      // Do not split tets if vertices bounding e2 and e3 belong to strata not 
-      // bounding each other.
-      // Do not split tets where the improved tet quality is not larger by a  
-      // multiple. This is to prevent explosive refinement of tets between two 
-      // close boundaries... 
-
-      apf::MeshEntity* v_oth3 = apf::getEdgeVertOppositeVert(m, d_e3[e3],
-                                                                     vert_1);
-      apf::MeshEntity* v_oth4 = apf::getEdgeVertOppositeVert(m, d_e4[e4], 
-                                                                     vert_2);
-      apf::ModelEntity* mdl_v = m->toModel(vert_1);
-      int d_sp1 = m->getModelType(mdl_v);
-      int c_sp1 = m->getModelTag(mdl_v);
-      mdl_v = m->toModel(vert_2);
-      int d_sp2 = m->getModelType(mdl_v);
-      int c_sp2 = m->getModelTag(mdl_v);
-
-      mdl_v = m->toModel(v_oth3);
-      int d_sp3 = m->getModelType(mdl_v);
-      int c_sp3 = m->getModelTag(mdl_v);
-      mdl_v = m->toModel(v_oth4);
-      int d_sp4 = m->getModelType(mdl_v);
-      int c_sp4 = m->getModelTag(mdl_v);
-
-      bool cell_ok = c_base->chk_conn_d_gmi(d_sp1, c_sp1, d_sp3, c_sp3) and 
-                     c_base->chk_conn_d_gmi(d_sp2, c_sp2, d_sp4, c_sp4);
-
-      bool cell_tri_ok = true;
-      if(tri_split_type[tri_state] == 2) {
-        mdl_v = m->toModel(d_e[e2]);
-        int d_e_sp2 = m->getModelType(mdl_v);
-        int c_e_sp2 = m->getModelTag(mdl_v);
-        mdl_v = m->toModel(d_e3[e3]);
-        int d_e_sp3 = m->getModelType(mdl_v);
-        int c_e_sp3 = m->getModelTag(mdl_v);
-        mdl_v = m->toModel(d_e4[e4]);
-        int d_e_sp4 = m->getModelType(mdl_v);
-        int c_e_sp4 = m->getModelTag(mdl_v);
-        cell_tri_ok = !(d_e_sp2 == d_e_sp3 or
-                        d_e_sp2 == d_e_sp4);
-      }
-
-      if(cell_tri_ok or cell_ok) {
-*/
-/*
-        double q_curr = measureTetQuality(m, ref_0c, tet.at(i));
-        std::vector<apf::Vector3> v(4, apf::Vector3(0,0,0));
-        std::vector<apf::Vector3> v_new(4, apf::Vector3(0,0,0));
-        for(int j = 0; j < 4; j++) {
-          m->getPoint(d_v[j], 0, v.at(j));
-          v_new.at(j) = v.at(j);
+        if(l_max > m_len and
+           j_max != -1) {
+          e1 = tri_split_map[tri_state];
         }
-        double q_init = calc_q(m, v);
-
-        apf::Vector3 pos_e2(0,0,0);
-        apf::Vector3 pos_e3(0,0,0);
-        apf::Vector3 pos_e4(0,0,0);
-
-        pos_e2 = vd_get_pos(m, d_e[e2]);
-        pos_e3 = vd_get_pos(m, d_e3[e3]);
-        pos_e4 = vd_get_pos(m, d_e4[e4]);
-        // Check the quality of the new tets generated by triangle t1.
-        // Shift the position corresponding to v1 or v2 to the center of e1.
-        // Looping over the other v(not v1/v2), shift the position to the center 
-        // of e3. Check quality.
-        bool q_ok = true;
-        v_new.at(v2) = pos_e2;
-        int j = 0;
-        while(j < 3 and q_ok) {
-          int v_next = (v2 + 1 + j) % 4;
-          if(v_next != v1) {
-            v_new.at(v_next) = pos_e3;
-            double q_curr = calc_q(m, v_new);
-            q_ok = (q_ok and q_curr > q_frac*q_init);
-            v_new.at(v_next) = v.at(v_next);
+      }
+  /*
+      // Single boundary triangle. From the remaining edges, determine the longest 
+      // internal edge. 
+      else if(tri_split_type[tri_state] == 2) {
+        int t1 = tri_split_map[tri_state] - 6;
+        //lookup_tt_e
+        double l_max = 0;
+        int j_max = -1;
+        for(int j = 0; j < 3; j++) {
+          e1 = lookup_t_tet_e_x[t1][j];
+          apf::ModelEntity* mdl = m->toModel(d_e[e1]);
+          int type_e = m->getModelType(mdl);
+          if(type_e == 3) {
+            double l_curr = vd_meas_ent(m, d_e[e1]);
+            if(l_curr > l_max) {
+              l_max = l_curr;
+              j_max = e1;
+            }
           }
-          j = j + 1;
         }
-        v_new.at(v2) = v.at(v2);
-        v_new.at(v1) = pos_e2;
-        j = 0;
-        while(j < 3 and q_ok) {
-          int v_next = (v1 + 1 + j) % 4;
-          v_new.at(v_next) = pos_e4;
-          if(v_next != v2) {
-            double q_curr = calc_q(m, v_new);
-            q_ok = (q_ok and q_curr > q_frac*q_init);
-            v_new.at(v_next) = v.at(v_next);
+        if(l_max > min_ins_rad*2 and
+           j_max != -1) {
+          e1 = j_max;
+        }
+      }
+      // Single internal triangle. Don't modify.
+      else if(tri_split_type[tri_state] == 1) {
+
+      }
+      else {
+        // Find the longest edge e2. Get the edge across(e1). 
+        // Get the adjacent tris.
+        // Find the edges e3 and e4 across e_i on the tets adjacent to the tris.
+        // Split e2,e3,e4.
+        double l_max = 0;
+        int j_max = -1;
+        for(int j = 0; j < 6; j++) {
+          apf::ModelEntity* mdl = m->toModel(d_e[j]);
+          int type_e = m->getModelType(mdl);
+          if(type_e == 3) {
+            double l_curr = vd_meas_ent(m, d_e[j]);
+            if(l_curr > l_max) {
+              l_max = l_curr;
+              j_max = j;
+            }
           }
-          j = j + 1;
         }
-        if(q_ok) {
-*/
-          ref_0c->split_map[d_e[e2]] = true;
-          ref_0c->split_map[d_e3[e3]] = true;
-          ref_0c->split_map[d_e4[e4]] = true;
-//        }
-//      }
+        if(l_max > min_ins_rad*2 and
+           j_max != -1) {
+          e1 = lookup_t_e_x_e[j_max];
+          //e1 = j_max;
+        }
+      }
+  */
+      if(e1 != -1) {
+        m->getDownward(tet.at(i), 0, d_v);
+        int e2 = lookup_t_e_x_e[e1];
+        int t1 = lookup_t_e_n_t[e1][0];
+        int t2 = lookup_t_e_n_t[e1][1];
+
+        // Vertices on the main tet that bound the edge to be split.
+        int v1 = lookup_t_e_n_g[e1][0];
+        int v2 = lookup_t_e_n_g[e1][1];
+
+        apf::MeshEntity* vert_1 = d_v[v1];
+        apf::MeshEntity* vert_2 = d_v[v2];
+
+        // First tri:
+        m->getUp(d_s[t1], up);
+        assert(up.n == 2);
+        apf::MeshEntity* tet_next = up.e[0];
+        if(up.e[0] == tet.at(i))
+          tet_next = up.e[1];
+        m->getDownward(tet_next, 1, d_e3);
+        int e1_next = findIn(d_e3, 6, d_e[e1]);
+        assert(e1_next > -1);
+        int e3 = lookup_t_e_x_e[e1_next];
+
+        // Second tri:
+        m->getUp(d_s[t2], up);
+        assert(up.n == 2);
+        tet_next = up.e[0];
+        if(up.e[0] == tet.at(i))
+          tet_next = up.e[1];
+        m->getDownward(tet_next, 1, d_e4);
+        e1_next = findIn(d_e4, 6, d_e[e1]);
+        assert(e1_next > -1);
+        int e4 = lookup_t_e_x_e[e1_next];
+  /*
+        // Do not split tets if vertices bounding e2 and e3 belong to strata not 
+        // bounding each other.
+        // Do not split tets where the improved tet quality is not larger by a  
+        // multiple. This is to prevent explosive refinement of tets between two 
+        // close boundaries... 
+
+        apf::MeshEntity* v_oth3 = apf::getEdgeVertOppositeVert(m, d_e3[e3],
+                                                                       vert_1);
+        apf::MeshEntity* v_oth4 = apf::getEdgeVertOppositeVert(m, d_e4[e4], 
+                                                                       vert_2);
+        apf::ModelEntity* mdl_v = m->toModel(vert_1);
+        int d_sp1 = m->getModelType(mdl_v);
+        int c_sp1 = m->getModelTag(mdl_v);
+        mdl_v = m->toModel(vert_2);
+        int d_sp2 = m->getModelType(mdl_v);
+        int c_sp2 = m->getModelTag(mdl_v);
+
+        mdl_v = m->toModel(v_oth3);
+        int d_sp3 = m->getModelType(mdl_v);
+        int c_sp3 = m->getModelTag(mdl_v);
+        mdl_v = m->toModel(v_oth4);
+        int d_sp4 = m->getModelType(mdl_v);
+        int c_sp4 = m->getModelTag(mdl_v);
+
+        bool cell_ok = c_base->chk_conn_d_gmi(d_sp1, c_sp1, d_sp3, c_sp3) and 
+                       c_base->chk_conn_d_gmi(d_sp2, c_sp2, d_sp4, c_sp4);
+
+        bool cell_tri_ok = true;
+        if(tri_split_type[tri_state] == 2) {
+          mdl_v = m->toModel(d_e[e2]);
+          int d_e_sp2 = m->getModelType(mdl_v);
+          int c_e_sp2 = m->getModelTag(mdl_v);
+          mdl_v = m->toModel(d_e3[e3]);
+          int d_e_sp3 = m->getModelType(mdl_v);
+          int c_e_sp3 = m->getModelTag(mdl_v);
+          mdl_v = m->toModel(d_e4[e4]);
+          int d_e_sp4 = m->getModelType(mdl_v);
+          int c_e_sp4 = m->getModelTag(mdl_v);
+          cell_tri_ok = !(d_e_sp2 == d_e_sp3 or
+                          d_e_sp2 == d_e_sp4);
+        }
+
+        if(cell_tri_ok or cell_ok) {
+  */
+  /*
+          double q_curr = measureTetQuality(m, ref_0c, tet.at(i));
+          std::vector<apf::Vector3> v(4, apf::Vector3(0,0,0));
+          std::vector<apf::Vector3> v_new(4, apf::Vector3(0,0,0));
+          for(int j = 0; j < 4; j++) {
+            m->getPoint(d_v[j], 0, v.at(j));
+            v_new.at(j) = v.at(j);
+          }
+          double q_init = calc_q(m, v);
+
+          apf::Vector3 pos_e2(0,0,0);
+          apf::Vector3 pos_e3(0,0,0);
+          apf::Vector3 pos_e4(0,0,0);
+
+          pos_e2 = vd_get_pos(m, d_e[e2]);
+          pos_e3 = vd_get_pos(m, d_e3[e3]);
+          pos_e4 = vd_get_pos(m, d_e4[e4]);
+          // Check the quality of the new tets generated by triangle t1.
+          // Shift the position corresponding to v1 or v2 to the center of e1.
+          // Looping over the other v(not v1/v2), shift the position to the center 
+          // of e3. Check quality.
+          bool q_ok = true;
+          v_new.at(v2) = pos_e2;
+          int j = 0;
+          while(j < 3 and q_ok) {
+            int v_next = (v2 + 1 + j) % 4;
+            if(v_next != v1) {
+              v_new.at(v_next) = pos_e3;
+              double q_curr = calc_q(m, v_new);
+              q_ok = (q_ok and q_curr > q_frac*q_init);
+              v_new.at(v_next) = v.at(v_next);
+            }
+            j = j + 1;
+          }
+          v_new.at(v2) = v.at(v2);
+          v_new.at(v1) = pos_e2;
+          j = 0;
+          while(j < 3 and q_ok) {
+            int v_next = (v1 + 1 + j) % 4;
+            v_new.at(v_next) = pos_e4;
+            if(v_next != v2) {
+              double q_curr = calc_q(m, v_new);
+              q_ok = (q_ok and q_curr > q_frac*q_init);
+              v_new.at(v_next) = v.at(v_next);
+            }
+            j = j + 1;
+          }
+          if(q_ok) {
+  */
+            ref_0c->split_map[d_e[e2]] = true;
+            ref_0c->split_map[d_e3[e3]] = true;
+            ref_0c->split_map[d_e4[e4]] = true;
+  //        }
+  //      }
+    
     }
   }
 
@@ -4322,7 +4690,8 @@ If the above is not satisfied, skip.
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob_sp");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
 }
 
 // Tets with a single boundary triangle cannot be fixed by just splitting. This 
@@ -4363,7 +4732,33 @@ void vd_sim::adapt_prob_edge_col_bound_manual(std::vector<apf::MeshEntity*> &tet
   split_tri.reserve(tet.size());
   split_vert.reserve(tet.size());
 
-  vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+
+  split_vert.reserve(tet.size());
+  for(int i = 0; i < tet.size(); i++) {
+    // Check if the given tet has an exterior 2-stratum vertex bounding an 
+    // exterior 2-stratum triangle. 
+    if(apf::MeshEntity* vert_b = get_tet_bound_vert(m, tet.at(i))) {
+      split_vert.push_back(vert_b);
+    }
+  }
+  {
+    std::vector<apf::MeshEntity*> edges_v(0);
+    std::vector<apf::MeshEntity*> tris_v(0);
+
+    std::vector<apf::MeshEntity*>::iterator it;
+    it = std::unique(split_vert.begin(), split_vert.end());
+    split_vert.resize(std::distance(split_vert.begin(),it));
+    vd_set_up(m, &split_vert, &edges_v);
+    vd_set_up(m, &edges_v, &tris_v);
+    vd_set_up(m, &tris_v, &split_tet);
+  }
+  vd_remove_set(&tet, &split_tet);
+  for(int i = 0; i < split_tet.size(); i++) {
+    vd_split_tet(m, c_base, split_tet.at(i), NULL);
+  }
+  split_tet.clear();
 
   for(int i = 0; i < tet.size(); i++) {
     int d = 3;
@@ -4445,7 +4840,8 @@ void vd_sim::adapt_prob_edge_col_bound_manual(std::vector<apf::MeshEntity*> &tet
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob");
 }
 
 // Splitting the edge e1 across the boundary tris doesn't seem to fix things
@@ -4480,7 +4876,8 @@ void vd_sim::adapt_prob_edge_sp_bound_manual(std::vector<apf::MeshEntity*> &tet)
   repl_sz_field(in, m, MA_SIZE_TYPE::EDGE_SPLIT);
   ModelEdgeSplit* ref_0c = (ModelEdgeSplit*) in->sizeField;
 
-  vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
 
   for(int i = 0; i < tet.size(); i++) {
     int d = 3;
@@ -4488,201 +4885,230 @@ void vd_sim::adapt_prob_edge_sp_bound_manual(std::vector<apf::MeshEntity*> &tet)
     m->getDownward(tet.at(i), 1, d_e);
     int tri_state = 0;
 
-    for(int j = 0; j < 4; j++) {
-      apf::ModelEntity* mdl = m->toModel(d_s[j]);
-      int type_e = m->getModelType(mdl);
-      if(type_e == 2)
-        tri_state = tri_state + tri_split_shift[j];
-    }
-    int e1 = -1;
-    if(tri_split_type[tri_state] == 0) {
-      e1 = tri_split_map[tri_state];
-    }
-/*
-    // Single boundary triangle. From the remaining edges, determine the longest 
-    // internal edge.  
-    // Currently handled by adapt_prob_col_bound_manual
-    else if(tri_split_type[tri_state] == 2) {
-      int t1 = tri_split_map[tri_state] - 6;
-      //lookup_tt_e
-      double l_max = 0;
-      int j_max = -1;
-      for(int j = 0; j < 3; j++) {
-        e1 = lookup_t_tet_e_x[t1][j];
-        apf::ModelEntity* mdl = m->toModel(d_e[e1]);
-        int type_e = m->getModelType(mdl);
-        if(type_e == 3) {
-          double l_curr = vd_meas_ent(m, d_e[e1]);
-          if(l_curr > l_max) {
-            l_max = l_curr;
-            j_max = e1;
+
+    if(apf::MeshEntity* vert_b = get_tet_bound_vert(m, tet.at(i))) {
+    // Check if the tetrahedron lies between two boundary triangles, one belonging
+    // to the exterior. If so, split the boundary vertex bounding the exterior
+    // triangle. TODO this is very prone to crashes if multiple tetrahedra 
+    //if(apf::MeshEntity* tri_2c = get_tet_bound_tri(m, tet.at(i))) {
+    //  apf::MeshEntity* vert_b = get_tri_vert_bound(m, tri_2c);
+      std::vector<apf::MeshEntity*> edge_b(0);
+      std::vector<apf::MeshEntity*> tri_b(0);
+      std::vector<apf::MeshEntity*> tet_b(0);
+
+      vd_set_up(m, vert_b, &edge_b);
+      vd_set_up(m, &edge_b, &tri_b);
+      vd_set_up(m, &tri_b, &tet_b);
+
+      for(int j = 0; j < tet_b.size(); j++) {
+        if(tet_b.at(j) != tet.at(i)) {
+          int j1 = findIn(&tet, tet.size(), tet_b.at(j));
+          if(j1 > i) {
+            tet.at(j1) = tet.back();
+            tet.resize(tet.size() - 1);
           }
         }
       }
-      if(l_max > m_len and
-         j_max != -1) {
-        e1 = j_max;
-      }
-    }
-*/
-    // Single internal triangle. Don't modify.
-    else if(tri_split_type[tri_state] == 1) {
-
+      vd_split_tet_vert(m, c_base, vert_b, NULL);
     }
     else {
-      // Find the longest edge e2. Get the edge across(e1). 
-      // Get the adjacent tris.
-      // Find the edges e3 and e4 across e_i on the tets adjacent to the tris.
-      // Split e2,e3,e4.
-      double l_max = 0;
-      int j_max = -1;
-      for(int j = 0; j < 6; j++) {
-        apf::ModelEntity* mdl = m->toModel(d_e[j]);
+
+      for(int j = 0; j < 4; j++) {
+        apf::ModelEntity* mdl = m->toModel(d_s[j]);
         int type_e = m->getModelType(mdl);
-        if(type_e == 3) {
-          double l_curr = vd_meas_ent(m, d_e[j]);
-          if(l_curr > l_max) {
-            l_max = l_curr;
-            j_max = j;
+        if(type_e == 2)
+          tri_state = tri_state + tri_split_shift[j];
+      }
+      int e1 = -1;
+      if(tri_split_type[tri_state] == 0) {
+        e1 = tri_split_map[tri_state];
+      }
+  /*
+      // Single boundary triangle. From the remaining edges, determine the longest 
+      // internal edge.  
+      // Currently handled by adapt_prob_col_bound_manual
+      else if(tri_split_type[tri_state] == 2) {
+        int t1 = tri_split_map[tri_state] - 6;
+        //lookup_tt_e
+        double l_max = 0;
+        int j_max = -1;
+        for(int j = 0; j < 3; j++) {
+          e1 = lookup_t_tet_e_x[t1][j];
+          apf::ModelEntity* mdl = m->toModel(d_e[e1]);
+          int type_e = m->getModelType(mdl);
+          if(type_e == 3) {
+            double l_curr = vd_meas_ent(m, d_e[e1]);
+            if(l_curr > l_max) {
+              l_max = l_curr;
+              j_max = e1;
+            }
           }
         }
-      }
-      if(l_max > m_len and
-         j_max != -1) {
-        e1 = lookup_t_e_x_e[j_max];
-        //e1 = j_max;
-      }
-    }
-
-    if(e1 != -1) {
-      m->getDownward(tet.at(i), 0, d_v);
-      int e2 = lookup_t_e_x_e[e1];
-      int t1 = lookup_t_e_n_t[e1][0];
-      int t2 = lookup_t_e_n_t[e1][1];
-
-      // Vertices on the main tet that bound the edge to be split.
-      int v1 = lookup_t_e_n_g[e1][0];
-      int v2 = lookup_t_e_n_g[e1][1];
-
-      apf::MeshEntity* vert_1 = d_v[v1];
-      apf::MeshEntity* vert_2 = d_v[v2];
-
-      // First tri:
-      m->getUp(d_s[t1], up);
-      assert(up.n == 2);
-      apf::MeshEntity* tet_next = up.e[0];
-      if(up.e[0] == tet.at(i))
-        tet_next = up.e[1];
-      m->getDownward(tet_next, 1, d_e3);
-      int e1_next = findIn(d_e3, 6, d_e[e1]);
-      assert(e1_next > -1);
-      int e3 = lookup_t_e_x_e[e1_next];
-
-      // Second tri:
-      m->getUp(d_s[t2], up);
-      assert(up.n == 2);
-      tet_next = up.e[0];
-      if(up.e[0] == tet.at(i))
-        tet_next = up.e[1];
-      m->getDownward(tet_next, 1, d_e4);
-      e1_next = findIn(d_e4, 6, d_e[e1]);
-      assert(e1_next > -1);
-      int e4 = lookup_t_e_x_e[e1_next];
-
-      // Do not split tets if vertices bounding e2 and e3 belong to strata not 
-      // bounding each other.
-      // Do not split tets where the improved tet quality is not larger by a  
-      // multiple. This is to prevent explosive refinement of tets between two 
-      // close boundaries... 
-
-      apf::MeshEntity* v_oth3 = apf::getEdgeVertOppositeVert(m, d_e3[e3],
-                                                                     vert_1);
-      apf::MeshEntity* v_oth4 = apf::getEdgeVertOppositeVert(m, d_e4[e4], 
-                                                                     vert_2);
-      apf::ModelEntity* mdl_v = m->toModel(vert_1);
-      int d_sp1 = m->getModelType(mdl_v);
-      int c_sp1 = m->getModelTag(mdl_v);
-      mdl_v = m->toModel(vert_2);
-      int d_sp2 = m->getModelType(mdl_v);
-      int c_sp2 = m->getModelTag(mdl_v);
-
-      mdl_v = m->toModel(v_oth3);
-      int d_sp3 = m->getModelType(mdl_v);
-      int c_sp3 = m->getModelTag(mdl_v);
-      mdl_v = m->toModel(v_oth4);
-      int d_sp4 = m->getModelType(mdl_v);
-      int c_sp4 = m->getModelTag(mdl_v);
-
-      bool cell_ok = c_base->chk_conn_d_gmi(d_sp1, c_sp1, d_sp3, c_sp3) and 
-                     c_base->chk_conn_d_gmi(d_sp2, c_sp2, d_sp4, c_sp4);
-
-      bool cell_tri_ok = true;
-      if(tri_split_type[tri_state] == 2) {
-        mdl_v = m->toModel(d_e[e2]);
-        int d_e_sp2 = m->getModelType(mdl_v);
-        int c_e_sp2 = m->getModelTag(mdl_v);
-        mdl_v = m->toModel(d_e3[e3]);
-        int d_e_sp3 = m->getModelType(mdl_v);
-        int c_e_sp3 = m->getModelTag(mdl_v);
-        mdl_v = m->toModel(d_e4[e4]);
-        int d_e_sp4 = m->getModelType(mdl_v);
-        int c_e_sp4 = m->getModelTag(mdl_v);
-        cell_tri_ok = !(d_e_sp2 == d_e_sp3 or
-                        d_e_sp2 == d_e_sp4);
-      }
-
-      if(cell_tri_ok or cell_ok) {
-        double q_curr = measureTetQuality(m, ref_0c, tet.at(i));
-        std::vector<apf::Vector3> v(4, apf::Vector3(0,0,0));
-        std::vector<apf::Vector3> v_new(4, apf::Vector3(0,0,0));
-        for(int j = 0; j < 4; j++) {
-          m->getPoint(d_v[j], 0, v.at(j));
-          v_new.at(j) = v.at(j);
+        if(l_max > m_len and
+           j_max != -1) {
+          e1 = j_max;
         }
-        double q_init = calc_q(m, v);
+      }
+  */
+      // Single internal triangle. Don't modify.
+      else if(tri_split_type[tri_state] == 1) {
 
-        apf::Vector3 pos_e2(0,0,0);
-        apf::Vector3 pos_e3(0,0,0);
-        apf::Vector3 pos_e4(0,0,0);
-
-        pos_e2 = vd_get_pos(m, d_e[e2]);
-        pos_e3 = vd_get_pos(m, d_e3[e3]);
-        pos_e4 = vd_get_pos(m, d_e4[e4]);
-        // Check the quality of the new tets generated by triangle t1.
-        // Shift the position corresponding to v1 or v2 to the center of e1.
-        // Looping over the other v(not v1/v2), shift the position to the center 
-        // of e3. Check quality.
-        bool q_ok = true;
-        v_new.at(v2) = pos_e2;
-        int j = 0;
-        while(j < 3 and q_ok) {
-          int v_next = (v2 + 1 + j) % 4;
-          if(v_next != v1) {
-            v_new.at(v_next) = pos_e3;
-            double q_curr = calc_q(m, v_new);
-            q_ok = (q_ok and q_curr > q_frac*q_init);
-            v_new.at(v_next) = v.at(v_next);
+      }
+      else {
+        // Find the longest edge e2. Get the edge across(e1). 
+        // Get the adjacent tris.
+        // Find the edges e3 and e4 across e_i on the tets adjacent to the tris.
+        // Split e2,e3,e4.
+        double l_max = 0;
+        int j_max = -1;
+        for(int j = 0; j < 6; j++) {
+          apf::ModelEntity* mdl = m->toModel(d_e[j]);
+          int type_e = m->getModelType(mdl);
+          if(type_e == 3) {
+            double l_curr = vd_meas_ent(m, d_e[j]);
+            if(l_curr > l_max) {
+              l_max = l_curr;
+              j_max = j;
+            }
           }
-          j = j + 1;
         }
-        v_new.at(v2) = v.at(v2);
-        v_new.at(v1) = pos_e2;
-        j = 0;
-        while(j < 3 and q_ok) {
-          int v_next = (v1 + 1 + j) % 4;
-          v_new.at(v_next) = pos_e4;
-          if(v_next != v2) {
-            double q_curr = calc_q(m, v_new);
-            q_ok = (q_ok and q_curr > q_frac*q_init);
-            v_new.at(v_next) = v.at(v_next);
-          }
-          j = j + 1;
+        if(l_max > m_len and
+           j_max != -1) {
+          e1 = lookup_t_e_x_e[j_max];
+          //e1 = j_max;
         }
-        if(q_ok) {
+      }
 
-          ref_0c->split_map[d_e[e2]] = true;
-          ref_0c->split_map[d_e3[e3]] = true;
-          ref_0c->split_map[d_e4[e4]] = true;
+      if(e1 != -1) {
+        m->getDownward(tet.at(i), 0, d_v);
+        int e2 = lookup_t_e_x_e[e1];
+        int t1 = lookup_t_e_n_t[e1][0];
+        int t2 = lookup_t_e_n_t[e1][1];
+
+        // Vertices on the main tet that bound the edge to be split.
+        int v1 = lookup_t_e_n_g[e1][0];
+        int v2 = lookup_t_e_n_g[e1][1];
+
+        apf::MeshEntity* vert_1 = d_v[v1];
+        apf::MeshEntity* vert_2 = d_v[v2];
+
+        // First tri:
+        m->getUp(d_s[t1], up);
+        assert(up.n == 2);
+        apf::MeshEntity* tet_next = up.e[0];
+        if(up.e[0] == tet.at(i))
+          tet_next = up.e[1];
+        m->getDownward(tet_next, 1, d_e3);
+        int e1_next = findIn(d_e3, 6, d_e[e1]);
+        assert(e1_next > -1);
+        int e3 = lookup_t_e_x_e[e1_next];
+
+        // Second tri:
+        m->getUp(d_s[t2], up);
+        assert(up.n == 2);
+        tet_next = up.e[0];
+        if(up.e[0] == tet.at(i))
+          tet_next = up.e[1];
+        m->getDownward(tet_next, 1, d_e4);
+        e1_next = findIn(d_e4, 6, d_e[e1]);
+        assert(e1_next > -1);
+        int e4 = lookup_t_e_x_e[e1_next];
+
+        // Do not split tets if vertices bounding e2 and e3 belong to strata not 
+        // bounding each other.
+        // Do not split tets where the improved tet quality is not larger by a  
+        // multiple. This is to prevent explosive refinement of tets between two 
+        // close boundaries... 
+
+        apf::MeshEntity* v_oth3 = apf::getEdgeVertOppositeVert(m, d_e3[e3],
+                                                                       vert_1);
+        apf::MeshEntity* v_oth4 = apf::getEdgeVertOppositeVert(m, d_e4[e4], 
+                                                                       vert_2);
+        apf::ModelEntity* mdl_v = m->toModel(vert_1);
+        int d_sp1 = m->getModelType(mdl_v);
+        int c_sp1 = m->getModelTag(mdl_v);
+        mdl_v = m->toModel(vert_2);
+        int d_sp2 = m->getModelType(mdl_v);
+        int c_sp2 = m->getModelTag(mdl_v);
+
+        mdl_v = m->toModel(v_oth3);
+        int d_sp3 = m->getModelType(mdl_v);
+        int c_sp3 = m->getModelTag(mdl_v);
+        mdl_v = m->toModel(v_oth4);
+        int d_sp4 = m->getModelType(mdl_v);
+        int c_sp4 = m->getModelTag(mdl_v);
+
+        bool cell_ok = c_base->chk_conn_d_gmi(d_sp1, c_sp1, d_sp3, c_sp3) and 
+                       c_base->chk_conn_d_gmi(d_sp2, c_sp2, d_sp4, c_sp4);
+
+        bool cell_tri_ok = true;
+        if(tri_split_type[tri_state] == 2) {
+          mdl_v = m->toModel(d_e[e2]);
+          int d_e_sp2 = m->getModelType(mdl_v);
+          int c_e_sp2 = m->getModelTag(mdl_v);
+          mdl_v = m->toModel(d_e3[e3]);
+          int d_e_sp3 = m->getModelType(mdl_v);
+          int c_e_sp3 = m->getModelTag(mdl_v);
+          mdl_v = m->toModel(d_e4[e4]);
+          int d_e_sp4 = m->getModelType(mdl_v);
+          int c_e_sp4 = m->getModelTag(mdl_v);
+          cell_tri_ok = !(d_e_sp2 == d_e_sp3 or
+                          d_e_sp2 == d_e_sp4);
+        }
+
+        if(cell_tri_ok or cell_ok) {
+          double q_curr = measureTetQuality(m, ref_0c, tet.at(i));
+          std::vector<apf::Vector3> v(4, apf::Vector3(0,0,0));
+          std::vector<apf::Vector3> v_new(4, apf::Vector3(0,0,0));
+          for(int j = 0; j < 4; j++) {
+            m->getPoint(d_v[j], 0, v.at(j));
+            v_new.at(j) = v.at(j);
+          }
+          double q_init = calc_q(m, v);
+
+          apf::Vector3 pos_e2(0,0,0);
+          apf::Vector3 pos_e3(0,0,0);
+          apf::Vector3 pos_e4(0,0,0);
+
+          pos_e2 = vd_get_pos(m, d_e[e2]);
+          pos_e3 = vd_get_pos(m, d_e3[e3]);
+          pos_e4 = vd_get_pos(m, d_e4[e4]);
+          // Check the quality of the new tets generated by triangle t1.
+          // Shift the position corresponding to v1 or v2 to the center of e1.
+          // Looping over the other v(not v1/v2), shift the position to the center 
+          // of e3. Check quality.
+          bool q_ok = true;
+          v_new.at(v2) = pos_e2;
+          int j = 0;
+          while(j < 3 and q_ok) {
+            int v_next = (v2 + 1 + j) % 4;
+            if(v_next != v1) {
+              v_new.at(v_next) = pos_e3;
+              double q_curr = calc_q(m, v_new);
+              q_ok = (q_ok and q_curr > q_frac*q_init);
+              v_new.at(v_next) = v.at(v_next);
+            }
+            j = j + 1;
+          }
+          v_new.at(v2) = v.at(v2);
+          v_new.at(v1) = pos_e2;
+          j = 0;
+          while(j < 3 and q_ok) {
+            int v_next = (v1 + 1 + j) % 4;
+            v_new.at(v_next) = pos_e4;
+            if(v_next != v2) {
+              double q_curr = calc_q(m, v_new);
+              q_ok = (q_ok and q_curr > q_frac*q_init);
+              v_new.at(v_next) = v.at(v_next);
+            }
+            j = j + 1;
+          }
+          if(q_ok) {
+
+            ref_0c->split_map[d_e[e2]] = true;
+            ref_0c->split_map[d_e3[e3]] = true;
+            ref_0c->split_map[d_e4[e4]] = true;
+          }
         }
       }
     }
@@ -4709,7 +5135,8 @@ void vd_sim::adapt_prob_edge_sp_bound_manual(std::vector<apf::MeshEntity*> &tet)
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob_sp");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
 }
 
 // Given the low quality tets, set the edge across the shortest edge 
@@ -4740,7 +5167,8 @@ void vd_sim::adapt_prob_edge_sp(std::vector<apf::MeshEntity*> &tet) {
 
   //for(int i = 0; i < edges.size(); i++)
   //  ref_0c->split_map[edges.at(i)] = true;
-  vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
 
   //vd_bipy* bipy_split = new vd_bipy(m, c_base, &f_calc);
   vd_bipy* bipy_split = new vd_bipy(m, c_base);
@@ -5014,7 +5442,8 @@ vertex sharing also
   if(a_f)
     apf::destroyField(a_f);
 
-  save_vtk_name("./output/adapt_prob_sp");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
 }
 
 
@@ -5043,7 +5472,8 @@ void vd_sim::adapt_prob_edge_sp2(std::vector<apf::MeshEntity*> &tet) {
 
   //for(int i = 0; i < edges.size(); i++)
   //  ref_0c->split_map[edges.at(i)] = true;
-  vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tet, "./output/adapt_prob_sp_ents");
 
   apf::Downward d_e;
   apf::Downward d_v;
@@ -5096,8 +5526,8 @@ void vd_sim::adapt_prob_edge_sp2(std::vector<apf::MeshEntity*> &tet) {
   double t1 = PCU_Time();
   dt_adapt = dt_adapt + (t1 - t0);
 
-
-  save_vtk_name("./output/adapt_prob_sp");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
 }
 
 void vd_sim::adapt_prob_edge_sp3(std::vector<apf::MeshEntity*> &tet) {
@@ -5146,7 +5576,8 @@ void vd_sim::adapt_prob_edge_sp3(std::vector<apf::MeshEntity*> &tet) {
   double t1 = PCU_Time();
   dt_adapt = dt_adapt + (t1 - t0);
 
-  save_vtk_name("./output/adapt_prob_sp");
+  if(sub_vtk)
+    save_vtk_name("./output/adapt_prob_sp");
 }
 /*
 void vd_sim::fix_low_q() {
@@ -5189,6 +5620,97 @@ void vd_sim::fix_low_q() {
 
 }
 */
+// For each tet, check if bounded by an exterior triangle, if not check if 
+// bounded by a 2-stratum triangle. If found, return the vertex 
+void vd_sim::get_low_q_verts(std::vector<apf::MeshEntity*>& tets,
+                             std::vector<apf::MeshEntity*>& verts) {
+}
+
+void vd_sim::fix_low_q_split_tet() {
+
+  double t0 = PCU_Time();
+  //f_calc.del_tri_fields(m);
+  if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
+    adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
+  else
+    adapt_mark_0c_min();
+
+  double adapt_ln = get_adapt_ln();
+  Step_ns sf(m, adapt_ln);
+  ma::Input* in = ma::configure(m, &sf);
+
+  // Use a different sizefield to split each 1stratum into two edges 
+  // at least.
+  // Doing only this causes time step issues. The quality of elements 
+  // at the boundaries should be high. 
+  delete in->sizeField;
+  ModelEdgeRefinerDist* ref_0c = new ModelEdgeRefinerDist(m);
+  ref_0c->set_target_th(coarse_th, split_th);
+  in->sizeField = ref_0c;
+
+  double m_len =  min_cell.at(0)/2;
+
+  //std::pair<apf::MeshEntity*, double> valid = calc_valid_q(m, ref_0c);       
+  std::vector<apf::MeshEntity*> tets(0);
+  std::vector<apf::MeshEntity*> verts(0);
+  double valid = get_low_q(m, ref_0c, tets, q_th)*0.99;
+  double good = get_good_q();
+  good = std::max(valid*1.1, good);
+
+  std::cout << "Minimum quality is " << valid
+            << ", good quality is " << good 
+            << std::endl;
+  if(sub_vtk)
+    vd_save_vtk_ent(m, &tets, "./output/adapt_prob_sp_ents");
+
+  get_low_q_verts(tets, verts);
+  for(int i = 0; i < verts.size(); i++) {
+    vd_split_tet_vert(m, c_base, verts.at(i), NULL);
+  }
+
+  if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
+    adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
+  else
+    adapt_mark_0c_min();
+
+  in = ma::configure(m, &sf);
+  delete in->sizeField;
+  ref_0c = new ModelEdgeRefinerDist(m);
+  ref_0c->set_target_th(coarse_th, split_th);
+  in->sizeField = ref_0c;
+
+  //in->shouldRunPreZoltan = true;
+  //in->shouldRunMidParma = true;
+  //in->shouldRunPostParma = true;
+  //in->shouldRefineLayer = true;
+
+  //in->shouldCoarsenLayer = true;
+  in->shouldRunPreZoltan = false;
+  in->shouldRunMidParma = false;
+  in->shouldRunPostParma = false;
+  in->shouldRefineLayer = false;
+  in->shouldCoarsenLayer = false;
+  in->shouldCoarsen = false;
+
+  in->shouldFixShape = ad_fix_shape;
+  in->goodQuality = good;
+  in->validQuality = valid;
+  //in->validQuality = 0;
+  in->maximumEdgeRatio = 12;
+  in->maximumIterations = 1;
+
+  ma::adapt(in);
+
+  apf::Field* a_f = m->findField("adapt_step");
+  if(a_f)
+    apf::destroyField(a_f);
+
+}
+
 // TODO adaptation function should be unified across all adaptation related 
 // functions in vd_sim to prevent emergence of different metric criteria.
 // In addition, the structure of the code should reflect that for easier 
@@ -5199,6 +5721,8 @@ void vd_sim::fix_low_q() {
   //f_calc.del_tri_fields(m);
   if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
     adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
   else
     adapt_mark_0c_min();
 
@@ -5232,6 +5756,8 @@ void vd_sim::fix_low_q() {
 
   if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
     adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
   else
     adapt_mark_0c_min();
 
@@ -5280,6 +5806,8 @@ void vd_sim::fix_low_q() {
   // adapt_sp_bound
   if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
     adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
   else
     adapt_mark_0c_min();
 
@@ -5296,7 +5824,10 @@ void vd_sim::fix_low_q() {
     // Refine all edges upward to the bounding vertices of the problematic tets
     // Run the general adaptation.
     //adapt_prob_edge_sp(tets);
-    adapt_prob_edge_sp_bound(tets);
+    if(tets.size() < 10)
+      adapt_prob_edge_sp_col(tets);
+    else
+      adapt_prob_edge_sp_bound(tets);
   }
   std::cout << "Minimum quality is " << valid
             << ", good quality is " << good 
@@ -5304,6 +5835,8 @@ void vd_sim::fix_low_q() {
 
   if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
     adapt_mark_bound_min();
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+    adapt_mark_curv();
   else
     adapt_mark_0c_min();
 
@@ -5341,10 +5874,13 @@ void vd_sim::fix_low_q() {
 
   // TODO manual operation:
   bool bound_manual = false;
-  if(bound_manual or bound_manual_count > bound_manual_count_limit) {
+  if(bound_manual ) {
+     //or bound_manual_count > bound_manual_count_limit) {
 
     if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
       adapt_mark_bound_min();
+    else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+      adapt_mark_curv();
     else
       adapt_mark_0c_min();
 
@@ -5369,6 +5905,8 @@ void vd_sim::fix_low_q() {
 
       if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
         adapt_mark_bound_min();
+      else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+        adapt_mark_curv();
       else
         adapt_mark_0c_min();
 
@@ -5406,6 +5944,8 @@ void vd_sim::fix_low_q() {
     }
     if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
       adapt_mark_bound_min();
+    else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+      adapt_mark_curv();
     else
       adapt_mark_0c_min();
 
@@ -5430,6 +5970,8 @@ void vd_sim::fix_low_q() {
 
       if(ad_type == ADAPT_TYPE::ADAPT_BOUND)
         adapt_mark_bound_min();
+      else if(ad_type == ADAPT_TYPE::ADAPT_CURVE)
+        adapt_mark_curv();
       else
         adapt_mark_0c_min();
 
@@ -5817,6 +6359,7 @@ void vd_sim::adapt(bool avg_flag) {
     if(valid < q_th) {
       for(int i = 0; i < 1; i++) {
         fix_low_q();
+        //fix_low_q_split_tet();
       }
     }
 
@@ -5876,7 +6419,72 @@ void vd_sim::adapt(bool avg_flag) {
     if(a_f)
       apf::destroyField(a_f);
 
-    save_vtk_name("./output/adapt_iter");
+    if(sub_vtk)
+      save_vtk_name("./output/adapt_iter");
+  }
+
+  else if(ad_type == ADAPT_TYPE::ADAPT_CURVE) {
+    double adapt_ln = get_adapt_ln();
+    double m_len =  min_cell.at(0)/2;
+    //double adapt_ln_mod = std::min(adapt_ln, bound_len*4);
+    ModelEdgeRefinerVarying* ref_0c = new ModelEdgeRefinerVarying(m);
+    ref_0c->set_target_th(coarse_th, split_th);
+
+    std::vector<apf::MeshEntity*> tets(0);
+    m_len =  min_cell.at(0)/2;
+    double valid = get_low_q(m, ref_0c, tets, q_th)*0.99;
+    delete ref_0c;
+    if(valid < q_th) {
+      for(int i = 0; i < 1; i++) {
+        fix_low_q();
+        //fix_low_q_split_tet();
+      }
+    }
+
+    adapt_mark_curv();
+    Step_ns sf(m, bound_len);
+
+    ma::Input* in = ma::configure(m, &sf);
+
+    ModelEdgeRefinerDist* ref_dist = new ModelEdgeRefinerDist(m);
+    ref_dist->set_target_th(coarse_th, split_th);
+
+    delete in->sizeField;
+    in->sizeField = ref_dist;
+
+    tets.clear();
+    valid = get_low_q(m, in->sizeField, tets, q_th);
+    double good = get_good_q();
+    good = std::max(valid*1.1, good);
+
+    std::cout << "Minimum quality is " << valid
+              << ", good quality is " << good 
+              << std::endl;
+
+    in->shouldRunPreZoltan = true;
+    in->shouldRunMidParma = true;
+    in->shouldRunPostParma = true;
+    in->shouldRefineLayer = true;
+
+    in->shouldCoarsenLayer = true;
+
+    in->shouldFixShape = ad_fix_shape;
+    in->goodQuality = good;
+    in->validQuality = valid;
+    in->maximumEdgeRatio = 12;
+    in->maximumIterations = 1;
+
+    double t0 = PCU_Time();
+    ma::adapt(in);
+    double t1 = PCU_Time();
+    dt_adapt = dt_adapt + (t1 - t0);
+
+    apf::Field* a_f = m->findField("adapt_step");
+    if(a_f)
+      apf::destroyField(a_f);
+
+    if(sub_vtk)
+      save_vtk_name("./output/adapt_iter");
   }
   else {
     double adapt_ln = get_adapt_ln();
@@ -5929,6 +6537,7 @@ void vd_sim::adapt(bool avg_flag) {
       if(valid < q_th) {
         for(int i = 0; i < 2; i++) {
           fix_low_q();
+	        //fix_low_q_split_tet();
         }
       }
 
@@ -5982,7 +6591,8 @@ void vd_sim::adapt(bool avg_flag) {
       m->verify();
       e_list.refresh();
 
-      save_vtk_name("./output/adapt_iter");
+      if(sub_vtk)
+        save_vtk_name("./output/adapt_iter");
 
     }
   }
@@ -6007,7 +6617,8 @@ void vd_sim::adapt_col(int dim_col, int tag_col) {
   //adapt_mark_1c_min();
   adapt_mark_0c_min();
   adapt_mark_0c_col(dim_col, tag_col);
-  save_vtk_name("./output/before_adapt");
+  if(sub_vtk)
+    save_vtk_name("./output/before_adapt");
 
   Step_ns sf(m, adapt_ln);
   ma::Input* in = ma::configure(m, &sf);
@@ -6147,10 +6758,9 @@ void vd_sim::clean_up() {
 
 }
 
-
 // By considering the possible cell split results, make sure there are enough 
 // free cells in the cell_base object.
-bool vd_sim::set_free_cells() {
+void vd_sim::set_free_cells() {
   int free_count = 10;
   bool c_flag = false;
   if (c_base->get_free_sz(0) < free_count) {
@@ -6200,8 +6810,105 @@ void vd_sim::set_c2move(std::vector<std::pair<int, int> >& c_2move_in,
   f_v2move = f_v2move_in;
 }
 
+// opts is a vector of strings in the form ...;d id;...
+// where d and id are the dimension and id of the strata to be moved.
+void opts2vecintpair(std::vector<std::string>& opts, 
+                                      std::vector<std::pair<int,int>>& vipair) {
+
+  vipair.clear();
+  vipair.reserve(opts.size());
+
+  for(int i = 0; i < opts.size(); i++) {
+    std::string temp("");
+    std::string::size_type sz;
+    temp = opts.at(i);
+
+    int c_dim = std::stoi(temp, &sz);
+    temp = temp.substr(sz);
+    int c_id = std::stoi(temp, &sz);
+    vipair.push_back(std::make_pair(c_dim, c_id));
+  }
+}
+
+
+void vd_sim::set_adapt_file(std::string ad_opts) {
+  std::vector<std::vector<std::string> > opts(0, std::vector<std::string > (0, std::string("")));
+  ReadNames(ad_opts.c_str(), ";", opts);
+  set_adapt_opts(opts.at(0));
+}
+
 // Used with adaptation scheme ADAPT_TYPE::ADAPT_BOUND. These cells are refined 
-bool vd_sim::set_adapt_bound_cells(double len, std::vector<std::pair<int, int> > &cells_ref_in) {
+// ADAPT_TYPE::X; ad_flag; ad_len; ad_param; additional_opt1; additional_opt2;
+// Examples:
+// ADAPT_STEP_1CELL; 1; 1.; 1.; 0; 0; 0;
+// ADAPT_STEP_1CELL; 0; 1.; 1.; 0; 1.; 0;
+// ADAPT_BOUND; 0; 1.; 1.; ./mshfiles/ref_list.txt; ./mshfiles/move_list.txt;
+void vd_sim::set_adapt_opts(std::vector<std::string>& opts) {
+  assert(opts.size() == 7);
+
+  // ad_type:
+  if(opts.at(0) == "ADAPT_1CELL") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_1CELL);
+  }
+  else if(opts.at(0) == "ADAPT_3CELL") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_3CELL);
+  }
+  else if(opts.at(0) == "ADAPT_BOUND") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_BOUND);
+  }
+  else if(opts.at(0) == "ADAPT_CURVE") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_CURVE);
+  }
+  else if(opts.at(0) == "ADAPT_STEP") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_STEP);
+  }
+  else if(opts.at(0) == "ADAPT_STEP_1CELL") {
+    set_adapt_type(ADAPT_TYPE::ADAPT_STEP_1CELL);
+  }
+  else {
+    set_adapt_type(ADAPT_TYPE::ADAPT_STEP_1CELL);
+  }
+  // ad_flag:
+  set_ad_flag(!(opts.at(1).compare(std::string("0")) == 0));
+  // ad_ratio:
+  if(std::strcmp(opts.at(2).c_str(), "0") != 0) {
+    set_adapt(atof(opts.at(2).c_str()));
+  }
+  else
+    set_adapt(1.);
+  // ad_param:
+  if(opts.at(3).compare(std::string("0")) != 0) {
+    set_adapt_param(atof(opts.at(3).c_str()));
+  }
+  else
+    set_adapt_param(1.);
+  // cells to refine:
+  if(opts.at(4).compare(std::string("0")) != 0) {
+    assert(ad_type == ADAPT_TYPE::ADAPT_BOUND);
+    std::vector<std::vector<std::string> > temp_str_vec(0,
+                                   std::vector<std::string> (0,""));
+    std::vector<std::pair<int,int> > cells_ref(0, std::make_pair(0,0));
+
+    ReadNames(opts.at(4).c_str(), ";", temp_str_vec);
+    opts2vecintpair(temp_str_vec.at(0), cells_ref);
+    set_adapt_bound_cells(std::stod(opts.at(5)), cells_ref);
+  }
+  // cells to move:
+  if(opts.at(6).compare(std::string("0")) != 0) {
+    assert(ad_type == ADAPT_TYPE::ADAPT_BOUND);
+    std::vector<std::vector<std::string> > temp_str_vec(0,
+                                   std::vector<std::string> (0,""));
+    std::vector<std::pair<int,int> > cells_move (0, std::make_pair(0,0));
+
+    ReadNames(opts.at(6).c_str(), ";", temp_str_vec);
+    opts2vecintpair(temp_str_vec.at(0), cells_move);
+
+    set_c2move(cells_move, true);
+  }
+}
+
+// Used with adaptation scheme ADAPT_TYPE::ADAPT_BOUND. These cells are refined 
+void vd_sim::set_adapt_bound_cells(double len, std::vector<std::pair<int, int> > &cells_ref_in) {
   bound_len = len;
   cells_ref = cells_ref_in;
 }
@@ -6351,6 +7058,9 @@ void vd_sim::set_time(std::vector<std::string>& opts) {
       flag_l_nbr = true;
       cond_l_nbr = std::stoi(out.at(1));
     }
+    else if(out.at(0) == "VTK_INTERVAL") {
+      set_save_vtk_interval(std::stod(out.at(1)));
+    }
   }
 }
 
@@ -6430,6 +7140,9 @@ void vd_sim::set_equations(std::vector<std::string>& opts) {
   bool flag_p = false;
   bool flag_eg = false;
   bool flag_int = false;
+  bool flag_drag = false;
+  double drag_rat = 1000.;
+
   std::vector<std::string> out(0, std::string(""));
   std::string delim("::");
   for(int i = 0; i < opts.size(); i++) {
@@ -6451,6 +7164,10 @@ void vd_sim::set_equations(std::vector<std::string>& opts) {
       set_integ_type(conv_str2integ(out.at(1)));
       flag_int = true;
     }
+    else if(out.at(0) == "DRAG_RAT") {
+      flag_drag = true;
+      drag_rat = std::stod(out.at(1));
+    }
   }
   if(!flag_v) {
     set_field_calc(VEL_TYPE::MASON);
@@ -6464,7 +7181,8 @@ void vd_sim::set_equations(std::vector<std::string>& opts) {
   if(!flag_int) {
     set_integ_type(INTEG_TYPE::RK2);
   }
-
+  if(flag_drag)
+    f_calc.set_drag_rat(drag_rat);
 }
 
 
@@ -7074,7 +7792,12 @@ bool vd_sim::chk_cell_rmv(int d, int cell_id) {
   rad_map_th.at(d-1)[cell_id] = !shrinking;
   return (shrinking);
 }
+
 void vd_sim::set_mov_flag(bool mov_flag) {
   save_mov = mov_flag;
+}
+
+void vd_sim::set_sub_vtk_flag(bool vtk_flag) {
+  sub_vtk = vtk_flag;
 }
 

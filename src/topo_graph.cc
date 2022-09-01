@@ -22,8 +22,6 @@
 #include "topo_topo.h"
 #include "topo_graph.h"
 
-void dummy_graph_stop() {}
-
 // Directed graph: Reversed edges are not equivalent.
 // Indirected graph: When adding an edge, smallest index is always added 
 // first, so comparing cross vertices (e.g. U1 vs V2) is not necessary. 
@@ -226,6 +224,7 @@ ngon_gmi& ngon_gmi::operator=( const ngon_gmi& obj ) {
     cells.at(i).first = obj.cells.at(i).first;
     cells.at(i).second = obj.cells.at(i).second;
   }
+  return *this;
 }
 
 void ngon_gmi::clear() {
@@ -1065,7 +1064,9 @@ void PatonFinder::find_paton() {
   while(!intersect.empty()) {
     int id_c = ord_map[last_id];
     if(!used_map[id_c]) {
-      for (std::tie(ai, ai_end) = g.adjacent_vertices(id_c); ai != ai_end; ++ai) {
+      std::tie(ai, ai_end) = g.adjacent_vertices(id_c);
+      while (ai != ai_end) {
+      //for (std::tie(ai, ai_end) = g.adjacent_vertices(id_c); ai != ai_end; ++ai) {
         if (T.find(*ai) == T.end()) {
           T.insert(*ai);
           intersect.insert(*ai);
@@ -1078,7 +1079,9 @@ void PatonFinder::find_paton() {
         else {
           find_nonrecursive(id_c, *ai);
         }
-        g.remove_edge(id_c, *ai);
+        std::set<int>::const_iterator ai_curr = ai;
+        ++ai;
+        g.remove_edge(id_c, *ai_curr);
         //std::cout << "After: g: " << std::endl;
         //g.print_adj();
         //std::cout << "After: tree: " << std::endl;
@@ -1200,18 +1203,26 @@ void PatonFinder::create_sub(cell_graph* const c_graph_in) {
       int u=g.source(&S.at(i).at(j));
       int v=g.target(&S.at(i).at(j));
       if (!burned[u]) {
-
         //std::cout << "Removing " << u << " on circuit." << std::endl;
-        for (std::tie(ai, ai_end) = g.adjacent_vertices(u); ai != ai_end; ++ai) {
-          g.remove_edge(u, *ai);
+        //for (std::tie(ai, ai_end) = g.adjacent_vertices(u); ai != ai_end; ++ai) {
+        std::tie(ai, ai_end) = g.adjacent_vertices(u);
+         while (ai != ai_end) {
+          std::set<int>::const_iterator ai_curr = ai;
+          ++ai;
+          g.remove_edge(u, *ai_curr);
         }
         burned[u] = true;
         burn_id[u] = -1;
       }
       if (!burned[v]) {
         //std::cout << "Removing " << v << " on circuit." << std::endl;
-        for (std::tie(ai, ai_end) = g.adjacent_vertices(v); ai != ai_end; ++ai) {
-          g.remove_edge(v, *ai);
+        //for (std::tie(ai, ai_end) = g.adjacent_vertices(v); ai != ai_end; ++ai) {
+        //  g.remove_edge(v, *ai);
+        std::tie(ai, ai_end) = g.adjacent_vertices(v);
+         while (ai != ai_end) {
+          std::set<int>::const_iterator ai_curr = ai;
+          ++ai;
+          g.remove_edge(v, *ai_curr);
         }
         burned[v] = true;
         burn_id[v] = -1;
@@ -3982,7 +3993,6 @@ void cell_ins_chk::update_path(int cell0) {
     cb->get_conn_dim(1, 0, cell0, &cells1.at(cell0));
 
     std::vector< crc > * circ = cg.get_circuits();
-    dummy_clear_stop();
 
     // TODO copy the source and target entities. Than find the unique ones.
     //std::cout << "Copying the circuit cells..." << std::endl;
@@ -4118,7 +4128,6 @@ void cell_ins_chk::update_path(int cell0) {
 
     std::vector< cell_path >* paths = cg.get_paths();
 
-    dummy_clear_stop();
     //path[cell0];
     path.at(cell0).clear();
     path.at(cell0).resize(paths->size());
@@ -4223,7 +4232,6 @@ circuit * cell_ins_chk::get_circ_gmi(int cell0, int circ) {
 void cell_ins_chk::get_circ_topo(ent_conn* c2, 
                                  ent_conn* c2_circ, ent_conn* c3_circ, 
                                  circuit* circ_in, int g_id, int cell_id) {
-  dummy_clear_stop();
 
   c2->conn.clear();
   c2_circ->conn.clear();
@@ -4307,7 +4315,6 @@ void cell_ins_chk::get_circ_topo_gmi(ent_conn* c2,
 void cell_ins_chk::get_circ_topo_dis(std::vector<ent_conn>* cs, 
                                  ent_conn* c2_circ, ent_conn* c3_circ, 
                                  circuit* circ_in, int g_id, int cell_id) {
-  dummy_clear_stop();
 
   for(int i = 0; i < cs->size(); i++)
     cs->at(i).conn.clear();
@@ -4506,6 +4513,7 @@ std::vector<int> cell_ins_chk::get_3cells_gmi(int cell0) {
   ent = cells3.at(cell0-1).conn;
   for(int i = 0; i < ent.size(); i++)
     ent.at(i)++;
+  return ent;
 }
 
 void cell_ins_chk::find_slice(int c0, std::vector< 
@@ -4655,8 +4663,6 @@ void cell_ins_chk::find_slice(path_adder* pa) {
     //c_base id
     pa->ca->add_cell(1, new_1cell.at(i), &c0s.at(i), &path_cells.at(i).second);
   }
-
-  dummy_clear_stop();
 
   e_cell.clear();
   e_cell.reserve(2);
@@ -5099,15 +5105,17 @@ void cell_ins_chk::print_graph() {
 
   for (int i = 0; i < circ_tup.size(); i++) {
 
-    std::cout << i << "th 0cell out of "<< circ_tup.size() << std::endl;
-    cg.get_23adj(i);
+    if(!cb->is_free(0, i)) {
+      std::cout << i << "th 0cell out of "<< circ_tup.size() << std::endl;
+      cg.get_23adj(i);
 
-    std::stringstream ss;
-    ss << "./output/23adj" << "_" << i+1 << ".dot";
-    std::string tmp = ss.str();
-    const char* cstr = tmp.c_str();
+      std::stringstream ss;
+      ss << "./output/23adj" << "_" << i+1 << ".dot";
+      std::string tmp = ss.str();
+      const char* cstr = tmp.c_str();
 
-    cg.print_graph_lbl(cstr);
+      cg.print_graph_lbl(cstr);
+    }
   }
 }
 
@@ -5429,7 +5437,6 @@ int path_adder::get_ng() {
 }
 
 void path_adder::clear() {
-  dummy_clear_stop();
 
   ca->clear();
 }

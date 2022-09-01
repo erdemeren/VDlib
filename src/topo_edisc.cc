@@ -401,15 +401,6 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
 
   for(int i = 0; i < es_surf.size(); i++) {
     int_ang[es_surf.at(i)] = vd_int_angle(m, es_surf.at(i), vert_ctr);
-
-
-    //std::cout << es_surf.at(i) << " "
-    //          << m->getModelType(m->toModel(es_surf.at(i))) << "c"
-    //          << m->getModelTag(m->toModel(es_surf.at(i)))
-    //          << " angle " << int_ang[es_surf.at(i)]
-    //          << std::endl;
-    //vd_print_down(m, es_surf.at(i));
-
   }
 
   std::vector<std::vector <apf::MeshEntity* > > e_fire(2, 
@@ -419,11 +410,6 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
   m->getUp(vert_ctr, up);
   e_fire[0].reserve(up.n);
   e_fire[1].reserve(up.n);
-
-  //std::cout << "Finding short " << std::endl; 
-  //std::cout << "First edge " << e_1 << " Final edge " << e_2 << " vert_ctr" 
-  //          <<  vert_ctr
-  //          << std::endl; 
   e_fire[0].push_back(e_1);
 
   sum_ang[e_1] = 0.;
@@ -437,22 +423,12 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
   apf::MeshEntity* e_next;
 
   while((!found or ang_min < ang_end) and e_fire[i_curr].size() > 0) {
-    //std::cout << "Found " << found 
-    //          << " ang_min " << ang_min
-    //          << " ang_end " << ang_end
-    //          << std::endl;
- 
-    //std::cout << "Current edges:" << std::endl; 
-    //for (int k = 0; k < e_fire[i_curr].size(); k++)
-    //  std::cout << e_fire[i_curr][k] << " ";
-    //std::cout << std::endl;
 
     // A triangle corner angle is always less than pi.
     double ang_min_temp = ang_min + 3.15;
     while(e_fire[i_curr].size() > 0) {
 
       e_curr = e_fire[i_curr].back();
-      //std::cout << "Current edge " << e_curr << std::endl; 
 
       // Get the triangles adjacent to the current edge.
       m->getUp(e_curr, up);
@@ -461,16 +437,8 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
           m->getDownward(up.e[i], 0, v);
           m->getDownward(up.e[i], 1, e);
 
-          //std::cout << up.e[i] << " "
-          //    << m->getModelType(m->toModel(es_surf.at(i))) << "c"
-          //    << m->getModelTag(m->toModel(es_surf.at(i)))
-          //    << std::endl;
-          //vd_print_vert(m, up.e[i]);
-
           int v1 = findIn(v, 3, vert_ctr);
           int e1 = findIn(e, 3, e_curr);
-
-          //std::cout << "e1 " << e1 << " v1 " << v1 << std::endl;
 
           // Get the other edge adjacent to the center vertex.
           if(lookup_tri_ed[v1][0] == e1) {
@@ -479,11 +447,6 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
           else {
             e_next = e[lookup_tri_ed[v1][0]];
           }
-          //std::cout << "Candidate e_next " << e_next << " "
-          //          << m->getModelType(m->toModel(e_next)) << "c"
-          //          << m->getModelTag(m->toModel(e_next))
-          //          << " slice " << slice_map[e_next] << std::endl;
-
           //std::cout << "Tri " << up.e[i]
           //         << std::endl;
           //for (int k = 0; k < 3; k++) {
@@ -495,9 +458,6 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
           //}
 
           // Check if the edge is burned.
-          //std::cout << e_next << ", Burned " << e_burn[e_next] 
-          //          << " slice " << (slice_map[e_next] < 0) 
-          //          << std::endl;
 
           // The edge can't belong to another disc.
           if (!(slice_map[e_next] < 0)) {
@@ -506,8 +466,6 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
               // Destination reached.
               sum_ang[e_next] = sum_ang[e_curr]+int_ang[up.e[i]];
               if (e_next == e_2) {
-                //std::cout << "Found e_2 " << e_2 << " tri: " << up.e[i] 
-                //          << std::endl;
                 e_burn[e_next] = true;
                 e_prev[e_next] = up.e[i];
                 e_prev[up.e[i]] = e_curr;
@@ -521,30 +479,20 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
                 if(c_dim == 3) {
                   if(c3_id == 0) {
                     if(sum_ang[e_next] < ang_end) {
-                      //std::cout << "Pushing " << e_next << std::endl; 
                       e_fire[i_next].push_back(e_next);
 
                       e_burn[e_next] = true;
                       e_prev[e_next] = up.e[i];
                       e_prev[up.e[i]] = e_curr;
-
-                      //std::cout << "e_next " << e_next 
-                      //          << " e_prev " << e_prev[e_next] 
-                      //          << " e_curr " << e_curr << std::endl;
                     }
                   }
                   else if(c3_id == m->getModelTag(m->toModel(e_next)) ) {
                     if(sum_ang[e_next] < ang_end) {
-                      //std::cout << "Pushing " << e_next << std::endl; 
                       e_fire[i_next].push_back(e_next);
 
                       e_burn[e_next] = true;
                       e_prev[e_next] = up.e[i];
                       e_prev[up.e[i]] = e_curr;
-
-                      //std::cout << "e_next " << e_next 
-                      //          << " e_prev " << e_prev[e_next] 
-                      //          << " e_curr " << e_curr << std::endl;
                     }
                   }
                 }
@@ -556,49 +504,32 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
               if(sum_ang[e_next] < ang_min_temp) {
                 ang_min_temp = sum_ang[e_next];
               }
-              //std::cout << "sum_ang " << sum_ang[e_next] 
-              //          << " ang_min_temp " << ang_min_temp
-              //          << std::endl; 
             }
             else {
               // If this branch is geometrically shorter, replace the previous
               // entities.
               if(sum_ang[e_curr]+int_ang[up.e[i]] < sum_ang[e_next]) {
-                //std::cout << "\tBurned, but lower sum_angle new: "
-                //        << sum_ang[e_curr]+int_ang[up.e[i]] << " old: "
-                //        << sum_ang[e_next]
-                //        << " ang_end " << ang_end
-                //        << " ang_min_temp " << ang_min_temp
-                //        << std::endl; 
 
                 e_prev[e_next] = up.e[i];
                 e_prev[up.e[i]] = e_curr;
 
                 if (e_next == e_2) {
-                  //std::cout << "Found e_2 " << e_2 << " tri: " << up.e[i] 
-                  //        << std::endl;
                   ang_end = sum_ang[e_next];
                 }
                 else {
                   // In order to update the nodes on the path, add the node back
                   // to the list.
-                  //std::cout << "Pushing " << e_next << std::endl; 
                   e_fire[i_next].push_back(e_next);
                 }
 
                 if(sum_ang[e_next] < ang_min_temp) {
                   ang_min_temp = sum_ang[e_next];
                 }
-                //std::cout << "sum_ang " << sum_ang[e_next] 
-                //          << " ang_min_temp " << ang_min_temp
-                //          << std::endl; 
               }
             }
 
           }
           else {
-            //std::cout << e_next << " already colored! " 
-            //          << slice_map[e_next] << std::endl;
           }
           e_burn[up.e[i]] = true;
 
@@ -632,10 +563,7 @@ bool vd_elens::vd_mesh_find_short(apf::MeshEntity* e_1, apf::MeshEntity* e_2,
     e_next = e_2;
     // Follow the line of predecessing entities back to the starting edge.
     while(e_next != e_1) {
-      //std::cout << "e_next " << e_next << " e_prev " << e_prev[e_next] 
-      //          << std::endl;
       if(m->getType(e_next) == 2) {
-        //std::cout << "Tri " << e_next << " " << es_tri->size() << std::endl;
         es_tri->push_back(e_next);
       }
       assert(e_prev[e_prev[e_next]] != e_next);
@@ -775,7 +703,6 @@ void vd_elens::clear() {
 }
 
 void vd_elens::null_slice_map() {
-  //std::cout << "Nulling the slice map..." << std::endl;
   for(int i = 0; i < es_elem.size(); i++) {
     slice_map[es_elem.at(i)] = 0;
   }
@@ -955,7 +882,7 @@ vd_edisc::vd_edisc(apf::Mesh2* m_in, cell_base* c, vd_entlist* el_in)
 //    f_calc(), vd_cd(), e_sh_save(), e_lens(), ng(), 
     spur(false), skip_en(false), calc_ext(false), calc_corner(false), ext_0cell(false),
     cell_flag(false),
-    mov_flag(false), drag_flag(false),
+    mov_flag(false), sub_vtk(true), verb_flag(true), drag_flag(false),
     shell2_map{}, wing_map{}, ext_new{}, ext_slice{}, ext_pc{}, ext_cor{},
     ext_proj_type{},
     wg_tag(WG_TYPE::EVOLVE),
@@ -1022,8 +949,6 @@ vd_edisc::vd_edisc(apf::Mesh2* m_in, cell_base* c, vd_entlist* el_in)
   m_trial = apf::makeEmptyMdsMesh(gmi_load(".null"), 3, false);
 
   f_calc.reload_cb(c_base_act);
-
-  //f_calc.dummy_func_stop();
 
   isotropic = false;
 
@@ -2070,7 +1995,8 @@ void vd_edisc::collect_slice_tris(
     char s[50];
     sprintf(s, "./output/tri_slice%d", i);
 
-    vd_save_vtk_set(e_lens.m, &e_set, s);
+    if(sub_vtk)
+      vd_save_vtk_set(e_lens.m, &e_set, s);
   }
   //std::cout << "\tSlice tri " << es_tri->size() << std::endl;
 
@@ -2749,7 +2675,6 @@ std::pair<int, int> vd_edisc::try_insert() {
 
       std::cout << "Unsuccessful insertion " << "1c" 
                 << e_lens.new_cell1_id.at(0) << std::endl;
-      //f_calc.dummy_func_stop();
       find_ctr_vel();
       //if(calc_ext and e_lens.c_base_curr->get_cell_ext_gmi(0, cell_id))
         fix_vel_new();
@@ -2831,7 +2756,6 @@ std::pair<int, int> vd_edisc::try_insert() {
     else {
       std::cout << "Unsuccessful insertion " << "2c" 
                 << e_lens.new_cell2_id << std::endl;
-      //f_calc.dummy_func_stop();
       find_ctr_vel();
       //if(calc_ext and e_lens.c_base_curr->get_cell_ext_gmi(0, cell_id))
         fix_vel_new();
@@ -2986,9 +2910,7 @@ void vd_edisc::try_2cell() {
   std::cout << "Trying 2cell insertions " << std::endl;
   std::cout << "Cell_id " << cell_id 
             << " paths: " << pt_sz << std::endl;
-  w2.resize(pt_sz);
-  e2.resize(pt_sz);
-  w2_exp.resize(pt_sz);
+  refresh_e();
 
   for(trial_curr = 0; trial_curr < pt_sz; trial_curr++) {
 
@@ -4427,7 +4349,6 @@ void vd_edisc::evolve_ins() {
   int mov_tag = 0;
   bool closing = false;
   bool all_pos = false;
-  //f_calc.dummy_func_stop();
 
   int iter = 0;
 
@@ -4593,7 +4514,8 @@ void vd_edisc::evolve_ins() {
     }
     iter = iter + 1;
   }
-  vd_save_vtk_vert(e_lens.m, &e_lens.vert_sp_new, "output/inserted");
+  if(sub_vtk)
+    vd_save_vtk_vert(e_lens.m, &e_lens.vert_sp_new, "output/inserted");
 }
 
 void vd_edisc::move_ctr() {
@@ -5298,7 +5220,7 @@ double vd_edisc::calc_dt_ext_dir(std::vector<apf::Vector3> &v_ctr,
 }
 
 
-double vd_edisc::move_vert_ext(std::vector<apf::Vector3> &v_ctr, 
+void vd_edisc::move_vert_ext(std::vector<apf::Vector3> &v_ctr, 
                                std::vector<apf::Vector3> &v_ctr_old, 
                                std::vector<apf::Vector3> &v_sp,
                                std::vector<apf::Vector3> &v_sp_old, 
@@ -5704,7 +5626,6 @@ void vd_edisc::find_ext_dir() {
       f_calc.vdparam.adj_dt(dt_glob);
       std::cout << "Using dt_glob" << std::endl;
     }
-    //f_calc.dummy_func_stop();
 
     std::cout << "r_th_min " << r_th_min << " r_th_max " << r_th_max 
               << std::endl;
@@ -5866,11 +5787,9 @@ void vd_edisc::find_ext_dir() {
         f_calc.vdparam.adj_dt(dt_glob);
         std::cout << "Using dt_glob" << std::endl;
       }
-      //f_calc.dummy_func_stop();
       t_total = t_total + f_calc.vdparam.dt;
       move_vert_ext(v_ctr, v_ctr_old, v_sp, v_sp_old, d_max);
 
-      //f_calc.dummy_func_stop();
       del_e = calc_energy_lens() - en_curr;
       // If energy is larger, revert changes and exit.
       if(del_e > 0) {
@@ -5945,7 +5864,6 @@ void vd_edisc::find_ext_dir() {
         save_vtk_mov(e_lens.m, mov_tag, "./outputtemp/series");
       mov_tag++;
     }
-    //f_calc.dummy_func_stop();
     std::cout << "r_min " << r_min << " r_max " << r_max << std::endl;
     if(counter == counter_sz) {
       std::cout << "Ext_loop: Takes too long to converge." << std::endl;
@@ -6007,7 +5925,6 @@ void vd_edisc::find_ext_dir() {
       iter = iter_sz;
       e_i_old = e_i_new;
       e_f_old = e_f_new;
-      //f_calc.dummy_func_stop();
     }
     else if (r_max > r_th_max) {
       std::cout << "Ext_loop: hit outer sphere" << std::endl;
@@ -6035,7 +5952,6 @@ void vd_edisc::find_ext_dir() {
       e_i_new = calc_energy_lens();
       iter++;
     }
-    //f_calc.dummy_func_stop();
 
     std::cout << "e_i_old " << e_i_old
               << " e_i_new " << e_i_new
@@ -6921,7 +6837,7 @@ bool vd_edisc::chk_inv_wg() {
 }
 // Calculate the maximum dissipation rate insertion without modifying the mesh. 
 void vd_edisc::calc_max_diss_trial_wg() {
-  init_elens();
+  //init_elens();
   apf::Field* vel_field = e_lens.m->findField("velocity_field");
 
   trial_type = 1;
@@ -7003,9 +6919,7 @@ void vd_edisc::calc_max_diss_trial_wg() {
   // two,
   // ng with local ids is used in extracting the entities.
   // ng with gmi ids is used to update the stratification.
-  w2.resize(pt_sz);
-  e2.resize(pt_sz);
-  w2_exp.resize(pt_sz);
+  refresh_e();
 
   for(trial_curr = 0; trial_curr < pt_sz; trial_curr++) {
     // Collect the relevant cells for the current 3cell couple to be joined.
@@ -7112,7 +7026,7 @@ void vd_edisc::calc_max_diss_trial_wg() {
 
 // Calculate the maximum dissipation rate insertion without modifying the mesh. 
 void vd_edisc::calc_max_diss_wg() {
-  init_elens();
+  //init_elens();
   apf::Field* vel_field = e_lens.m->findField("velocity_field");
 
   trial_type = 1;
@@ -7272,9 +7186,8 @@ void vd_edisc::calc_max_diss_wg() {
   // two,
   // ng with local ids is used in extracting the entities.
   // ng with gmi ids is used to update the stratification.
-  w2.resize(pt_sz);
-  e2.resize(pt_sz);
-  w2_exp.resize(pt_sz);
+  refresh_e();
+
   for(trial_curr = 0; trial_curr < pt_sz; trial_curr++) {
     // Collect the relevant cells for the current 3cell couple to be joined.
     ng.clear();
@@ -7946,7 +7859,7 @@ void vd_edisc::insert_1cell(int circ) {
 
 // Not very useful, as the inversion could happen after generation of new 
 // entities and fixing the velocities.
-bool vd_edisc::detect_inv_pre() {
+void vd_edisc::assert_inv_pre() {
   apf::Up up;
   apf::Downward d_v;
   apf::Downward d_t;
@@ -8805,6 +8718,7 @@ bool vd_edisc::chk_ma_swap_lens() {
       }
     }
   }
+  return true;
 }
 
 // Create the 2cell triangles and fill the openings inside the 3cells getting 
@@ -9250,7 +9164,7 @@ void vd_edisc::fill_void() {
 }
 
 int vd_edisc::get_circ_type(int circ_in) {
-  vd_cd->get_circ_type(circ_in);
+  return vd_cd->get_circ_type(circ_in);
 /*
   if(spur)
     vd_cd->get_circ_type(circ_in);
@@ -10292,7 +10206,7 @@ void vd_edisc::destroy_ent() {
 }
 
 // Using the edge and 3cell model list, connect the edges of the disc or fin. 
-bool vd_edisc::get_disc_edges(circuit* circ_in, vd_disc* disc_in) {
+void vd_edisc::get_disc_edges(circuit* circ_in, vd_disc* disc_in) {
 
   // TODO Get the actual 3cell indices. It is still confusing because the 2-
   // cell indices used belong to the graph...
@@ -10366,7 +10280,8 @@ bool vd_edisc::get_disc_edges(circuit* circ_in, vd_disc* disc_in) {
   vd_set_down(disc_in->m, &e_set.at(2), &e_set.at(1));
   vd_set_down(disc_in->m, &e_set.at(1), &e_set.at(0));
 
-  vd_save_vtk_set(disc_in->m, &e_set, "output/tri_disc");
+  if(sub_vtk)
+    vd_save_vtk_set(disc_in->m, &e_set, "output/tri_disc");
 
   cp_tri(&es_tri, disc_in);
 
@@ -10517,27 +10432,29 @@ void vd_edisc::set_trial() {
   vd_set_down(m_main, &es_elem, &es_surf);
   vd_set_down(m_main, &es_surf, &es_edge);
 
-  std::vector<apf::MeshEntity*> es_vert_vtk(0);
-  std::vector<apf::MeshEntity*> es_edge_vtk(0);
-  std::vector<apf::MeshEntity*> es_surf_vtk(0);
-  std::vector<apf::MeshEntity*> es_elem_vtk(0);
+  if(sub_vtk) {
+    std::vector<apf::MeshEntity*> es_vert_vtk(0);
+    std::vector<apf::MeshEntity*> es_edge_vtk(0);
+    std::vector<apf::MeshEntity*> es_surf_vtk(0);
+    std::vector<apf::MeshEntity*> es_elem_vtk(0);
 
-  init_ent_set(&es_vert_vtk, vert_ctr);
+    init_ent_set(&es_vert_vtk, vert_ctr);
 
-  // Get the tetrahedra:
-  vd_set_up(m_main, &es_vert_vtk, &es_edge_vtk);
-  vd_set_up(m_main, &es_edge_vtk, &es_surf_vtk);
-  vd_set_up(m_main, &es_surf_vtk, &es_elem_vtk);
+    // Get the tetrahedra:
+    vd_set_up(m_main, &es_vert_vtk, &es_edge_vtk);
+    vd_set_up(m_main, &es_edge_vtk, &es_surf_vtk);
+    vd_set_up(m_main, &es_surf_vtk, &es_elem_vtk);
 
-  // Save the entities before the transfer.
-  vd_rem_tag(m_main);
-  vd_tag_mesh(m_main);
-  vd_tag_set(m_main, &es_elem_vtk, "Vertex_ent");
+    // Save the entities before the transfer.
+    vd_rem_tag(m_main);
+    vd_tag_mesh(m_main);
+    vd_tag_set(m_main, &es_elem_vtk, "Vertex_ent");
 
-  apf::writeVtkFiles("./output/before_main", m_main);
+    apf::writeVtkFiles("./output/before_main", m_main);
 
-  // Save the entities before the transfer.
-  vd_save_vtk_vert(m_main, vert_ctr, "./output/before_main");
+    // Save the entities before the transfer.
+    vd_save_vtk_vert(m_main, vert_ctr, "./output/before_main");
+  }
 
   // Get the lower dimensional entities:
   vd_set_down(m_main, &es_elem, &es_surf);
@@ -10617,7 +10534,8 @@ void vd_edisc::set_trial() {
   //vd_entlist_v ent_list(m_act, vert_ctr_act, c_base);
   //ent_list.print();
 
-  vd_save_vtk_vert(m_act, vert_ctr_act, "./output/before_precond");
+  if(sub_vtk)
+    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/before_precond");
 
   f_calc.vd_att_fields(m_precond);
 
@@ -10653,7 +10571,8 @@ void vd_edisc::set_trial() {
     /////////////////////////////////////////////////////
     // Reload the vert list used in trial mesh generation.
 
-    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_precond");
+    if(sub_vtk)
+      vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_precond");
 
     std::vector<std::vector<apf::MeshEntity*> > es_pre
                  (4, std::vector<apf::MeshEntity*> (0) );
@@ -10666,7 +10585,8 @@ void vd_edisc::set_trial() {
     for(int i = 3; i > 0; i--)
       vd_set_down(m_act, &es_pre[i], &es_pre[i-1]);
 
-    vd_save_vtk_set(m_act, &es_pre, "output/pre_vert");
+    if(sub_vtk)
+      vd_save_vtk_set(m_act, &es_pre, "output/pre_vert");
 
     vert.clear();
     vert.reserve(es_pre[0].size());
@@ -10957,7 +10877,8 @@ void vd_edisc::precond_mesh() {
     std::cout << "Volumes after 3cell " << std::endl;
     assert(vd_chk_neg_sgn(m_act) == 0);
 
-    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_3cell");
+    if(sub_vtk)
+      vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_3cell");
     init_elens();
     e_lens.c_base_curr = c_base_act;
 
@@ -10989,7 +10910,8 @@ void vd_edisc::precond_mesh() {
     // init_elens
     init_elens();
     e_lens.c_base_curr = c_base_act;
-    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_cross");
+    if(sub_vtk)
+      vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_cross");
 
     assert(e_lens.init_flag);
 
@@ -11012,7 +10934,6 @@ void vd_edisc::precond_mesh() {
     //                                          vert_ctr_act, true)*5/6;
 
     //if(l_min < std::numeric_limits<double>::min())
-    //    f_calc.dummy_func_stop();
 
     vd_lens* lens_sph = new vd_lens(m_act, c_base, &f_calc);
 
@@ -11078,7 +10999,8 @@ void vd_edisc::precond_mesh() {
 
     std::cout << "Volumes after split " << std::endl;
     vd_chk_neg_sgn(m_act);
-    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_split");
+    if(sub_vtk)
+      vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_split");
 
     apf::Vector3 ctr_pos(0,0,0);
     m_act->getPoint(vert_ctr_act, 0, ctr_pos);
@@ -11088,7 +11010,8 @@ void vd_edisc::precond_mesh() {
       vd_chk_neg_sgn(m_act);
     }
 
-    vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_sphere");
+    if(sub_vtk)
+      vd_save_vtk_vert(m_act, vert_ctr_act, "./output/after_sphere");
 
     //vd_entlist_v ent_list(m_act, vert_ctr_act, c_base);
     //ent_list.print();
@@ -12164,22 +12087,25 @@ void vd_edisc::upd_pos_sph_wg(std::vector< std::pair< std::pair<int,int>,
     }
   }
 
-  for(int slice = 0; slice < v_ctr_new.size(); slice++) {
-    std::string vtk_name = "./output/sub/v_trial_exp_" + std::to_string(trial_type) + "_" + std::to_string(trial_curr); 
-    if(trial_type == 2)
-      vtk_name = vtk_name + "_" + std::to_string(ng.curr);
-    vtk_name = vtk_name + "_s" + std::to_string(slice);
-    vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
-    vtk_name = "./output/v_trial_exp"+ std::to_string(slice);
-    vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
-  }
+  if(sub_vtk) {
 
-  for (int path = 0; path < v_sp_new.size(); path++) {
-    std::string vtk_name = "./output/sub/v_trial_exp_" + std::to_string(trial_type) + "_" + std::to_string(trial_curr); 
-    if(trial_type == 2)
-      vtk_name = vtk_name + "_" + std::to_string(ng.curr);
-    vtk_name = vtk_name + "_p" + std::to_string(path);
-    vd_save_vtk_vert(m_trial, v_sp_new.at(path), vtk_name.c_str());
+    for(int slice = 0; slice < v_ctr_new.size(); slice++) {
+      std::string vtk_name = "./output/sub/v_trial_exp_" + std::to_string(trial_type) + "_" + std::to_string(trial_curr); 
+      if(trial_type == 2)
+        vtk_name = vtk_name + "_" + std::to_string(ng.curr);
+      vtk_name = vtk_name + "_s" + std::to_string(slice);
+      vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
+      vtk_name = "./output/v_trial_exp"+ std::to_string(slice);
+      vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
+    }
+
+    for (int path = 0; path < v_sp_new.size(); path++) {
+      std::string vtk_name = "./output/sub/v_trial_exp_" + std::to_string(trial_type) + "_" + std::to_string(trial_curr); 
+      if(trial_type == 2)
+        vtk_name = vtk_name + "_" + std::to_string(ng.curr);
+      vtk_name = vtk_name + "_p" + std::to_string(path);
+      vd_save_vtk_vert(m_trial, v_sp_new.at(path), vtk_name.c_str());
+    }
   }
 /*
   // Evolve the surrounding vertices.
@@ -12667,7 +12593,8 @@ void vd_edisc::reload_trial_wg(
     copy_slice_ents_wg(slice, v_ctr_new, p2t_ctr, t2p_ctr, s_map, slice_cells);
     m_trial->acceptChanges();
     std::string vtk_name = "./output/v_trial"+ std::to_string(slice);
-    vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
+    if(sub_vtk)
+      vd_save_vtk_vert(m_trial, v_ctr_new.at(slice), vtk_name.c_str());
   }
 
 
@@ -12680,10 +12607,12 @@ void vd_edisc::reload_trial_wg(
 
     int s1 = e_lens.slices.at(2*path) - 1;
     int s2 = e_lens.slices.at(2*path+1) - 1;
-    std::string vtk_name = "./output/v_trial"+ std::to_string(s1);
-    vd_save_vtk_vert(m_trial, v_ctr_new.at(s1), vtk_name.c_str());
-    vtk_name = "./output/v_trial"+ std::to_string(s2);
-    vd_save_vtk_vert(m_trial, v_ctr_new.at(s2), vtk_name.c_str());
+    if(sub_vtk) {
+      std::string vtk_name = "./output/v_trial"+ std::to_string(s1);
+      vd_save_vtk_vert(m_trial, v_ctr_new.at(s1), vtk_name.c_str());
+      vtk_name = "./output/v_trial"+ std::to_string(s2);
+      vd_save_vtk_vert(m_trial, v_ctr_new.at(s2), vtk_name.c_str());
+    }
   }
   expand_2c_void_wg(path_cells, slice_cells, v_ctr_new, v_sp_new, 
                     v2c_new, p2t_ctr, p2t_sp,
@@ -12905,6 +12834,33 @@ void vd_edisc::overwrite_pc(vd_disc_cut* vd_cut) {
   ext_0cell = false;
 
   ext_0cell = vd_cd->get_ext();
+}
+
+void vd_edisc::refresh_e() {
+
+  w1.resize(circ_sz);
+  e1.resize(circ_sz);
+
+  int step = 10;
+  w1_exp.resize(circ_sz);
+  for(int i = 0; i < circ_sz; i++)
+    w1_exp.at(i).resize(step);
+
+  w2.resize(pt_sz);
+  e2.resize(pt_sz);
+  w2_exp.resize(pt_sz);
+
+  for(trial_curr = 0; trial_curr < pt_sz; trial_curr++) {
+    // Collect the relevant cells for the current 3cell couple to be joined.
+    ng.clear();
+    get_path_ngon(trial_curr, &ng);
+    ng.print();
+    int ngon_sz = ng.ngons.size();
+
+    w2.at(trial_curr).resize(ngon_sz);
+    e2.at(trial_curr).resize(ngon_sz);
+    w2_exp.at(trial_curr).resize(ngon_sz);
+  }
 }
 
 bool vd_edisc::burn_the_cut_c2(int k, vd_disc_cut* vd_cut, vd_plane* pl) {
@@ -13351,7 +13307,6 @@ bool vd_edisc::burn_the_cut_c3(int k, vd_disc_cut* vd_cut) {
 
   pl_int_2pts(e_lens.m, p1, p2, &pl, &v_int);
   bool cut1 = (v_int.cut == 1);
-  dummy_graph_stop();
 
   bounds = get_bound(c2_edge.at(c2_e));
   e_lens.m->getPoint(getEdgeVertOppositeVert(e_lens.m, bounds.first, 
@@ -14353,7 +14308,8 @@ void vd_edisc::set_proj(PROJ_TYPE PROJ) {
 
 // Visual output of the trial mesh. 
 void vd_edisc::vtk_mesh() {
-
+  if(!sub_vtk)
+    return;
   safe_mkdir("./output");
 
   std::stringstream ss;
@@ -14407,6 +14363,8 @@ void vd_edisc::vtk_mesh() {
 }
 
 void vd_edisc::vtk_trial() {
+  if(!sub_vtk)
+    return;
 
   std::stringstream ss;
   ss << "./output/trial";
@@ -14429,6 +14387,8 @@ void vd_edisc::vtk_trial() {
 }
 
 void vd_edisc::vtk_precond() {
+  if(!sub_vtk)
+    return;
 
   std::stringstream ss;
   ss << "./output/trial";
@@ -14441,6 +14401,14 @@ void vd_edisc::vtk_precond() {
   std::string tmp = ss.str();   
   const char* cstr = tmp.c_str();
   apf::writeVtkFiles(cstr, m_precond);
+}
+
+void vd_edisc::set_sub_vtk_flag(bool vtk_flag) {
+  sub_vtk = vtk_flag;
+}
+
+void vd_edisc::set_verbose_flag(bool flag_in) {
+  verb_flag = flag_in;
 }
 
 // Given a list of 2shells, find the joint shell.

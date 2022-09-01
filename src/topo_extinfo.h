@@ -34,8 +34,6 @@ public:
   Entity_set() : n(0) {e.resize(68000)}
 };
 */
-void dummy_clear_stop();
-void dummy_chk_stop();
 
 // Vector implementation of findin, which is spurious but will help replacing 
 // the Entity_set implementation.
@@ -61,6 +59,7 @@ void vd_find_ent_geom(apf::Mesh2* m, std::vector<apf::MeshEntity* >* ep,
 
 void vd_find_cell_v(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim);
 void vd_rem_cell(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim);
+void vd_keep_cell(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim);
 void vd_find_bound_v(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim);
 
 void vd_find_edge_topo(apf::Mesh2* m, 
@@ -155,6 +154,10 @@ void vd_chk_set_geom(apf::Mesh2* m,
 // the entity.
 bool vd_chk_ent_v(apf::Mesh2* m, apf::MeshEntity* ent, 
                                 std::vector<apf::MeshEntity* >* es_v);
+
+apf::MeshEntity* get_tet_bound_tri(apf::Mesh2* m, apf::MeshEntity* tet);
+apf::MeshEntity* get_tri_vert_bound(apf::Mesh2* m, apf::MeshEntity* tri);
+apf::MeshEntity* get_tet_bound_vert(apf::Mesh2* m,apf::MeshEntity* tet);
 
 // Given an element entity set ep1, print lower adjacencies.
 void vd_print_down(apf::Mesh2* m, const std::vector<apf::MeshEntity* >* ep_in);
@@ -298,6 +301,7 @@ int vd_chk_edge_int(apf::Mesh2* m, apf::MeshEntity* edge
 
 // Print the entities with their cell memberships.
 void vd_print_ent(apf::Mesh2* m);
+void vd_print_ent(apf::Mesh2* m, apf::MeshEntity* e);
 
 // Find the edges member of a certain cell and dimension.
 // Store in ep*.
@@ -491,6 +495,20 @@ void save_vtk_mov(apf::Mesh2* m, int t_in, const char* FileName ="./outputtemp/s
 // TODO remove. GDB doesn't print content of map containers. This is a quick 
 // solution to print the map value associated with key.
 double print_map_i2d(std::map<int, double>& map, int key);
+
+////////////////////////////////////////////
+// MATLAB related print functions. 
+////////////////////////////////////////////
+
+// Around a vertex, print the adjacent vertex positions and connectivities in a 
+// MATLAB accepted format.
+void print_matlab_vert_pos(apf::Mesh2* m, apf::MeshEntity* vert);
+
+// Around a vertex, for adjacent boundary triangles and edges, print the 
+// adjacent vertex positions and the entity connectivities.
+void print_matlab_bound_vert_pos(apf::Mesh2* m, apf::MeshEntity* vert);
+
+
 #endif
 
 

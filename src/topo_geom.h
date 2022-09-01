@@ -238,6 +238,10 @@ void vd_print_norm2(apf::Mesh2* m);
 // Given two vectors, calculate the inner angle.
 double vd_inner_angle(apf::Vector3 v1, apf::Vector3 v2);
 
+// Given an interior direction and two directions, all lying on the same plane,
+// find the angle of the arc that the interior direction dissects.
+double vd_int_angle_n(apf::Vector3 norm_in, apf::Vector3 norm1, apf::Vector3 norm2, double tol = 10e-1);
+
 // Given two adjacent boundary surfaces and the geometry of the inside volume, 
 // find the exterior angle defined between those surfaces.
 double vd_ext_angle(apf::Mesh2* m, apf::MeshEntity* surf1, 
@@ -407,6 +411,25 @@ void pl_int_edge(apf::Mesh2* m, apf::MeshEntity* ent, vd_plane* pl, vd_inter* v_
 // Given a triangle, check if the plane intersects the triangle.
 int pl_int_tri(apf::Mesh2* m, apf::MeshEntity* ent, apf::Vector3 p_pos, apf::Vector3 p_norm);
 
+// Calculate if a triangle intersects a plane. If so, set the direction of the 
+// intersection line and return whether the intersection is valid.
+// If all lie on one side of the plane no intersection, return false.
+// If all lie on the plane, return false.
+// If two lie on the plane and one on one side, return true.
+// If two lie on one side and one on the line, return false.
+// If two lie on one side and one on the other, true.
+// If return value is true, set l_dir as cross product of the p_norm and area 
+// norm.
+bool pl_int_tri_line(apf::Mesh2* m, apf::MeshEntity* ent, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos, double tol = -1);
+
+// Given a tetrahedron and a plane, find a bounding triangle that intersects the
+// plane. Return true if found and set the line of intersection.
+bool pl_int_tet_line(apf::Mesh2* m, apf::MeshEntity* tet, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos);
+
 // Find the intersection of a line and a plane. Assume they intersect.
 apf::Vector3 pl_int_line(apf::Vector3 l_pos, apf::Vector3 l, 
                           apf::Vector3 pl_pos, apf::Vector3 pl_norm);
@@ -456,6 +479,9 @@ apf::Vector3 rot_dir(apf::Matrix3x3* rot, apf::Vector3 dir);
 
 // Given dir and angle, determine the rotation matrix.
 apf::Matrix3x3 rot_matrix_dir(apf::Vector3 dir, double angle);
+
+// Invert a 3x3 matrix. Uses vd_cross instead of cross which is prone to numerical round-off errors.
+apf::Matrix3x3 vd_invert(apf::Matrix3x3& mat_in);
 
 // Find the center and radius of circle passing through three points.
 std::pair<apf::Vector3, double> three_pt_circ(std::vector<apf::Vector3>& v);

@@ -638,6 +638,7 @@ double getMedianEntSize_hist(apf::Mesh2* m, int dim, int N) {
       }      
     }
     assert(nbr > ent_count/2);
+    return max_val;
   }
 }
 
@@ -688,6 +689,7 @@ double getMedianEntSize_hist(std::vector<double> &sz, int N) {
       }      
     }
     assert(nbr > ent_count/2);
+    return max_val;
   }
 }
 
@@ -1206,7 +1208,10 @@ apf::Vector3 vd_area_out(apf::Mesh2* m, apf::MeshEntity* surf, int geom) {
     else
       return dA*(-1.0);
   }
-
+  else {
+    printf("%p has no upward adjacency!\n", surf);    
+    return dA;
+  }
 }
 
 // Given a volume geometry tag, and a boundary surface triangle, 
@@ -1274,6 +1279,10 @@ apf::Vector3 vd_grad(apf::Mesh2* m, apf::MeshEntity* vert, apf::MeshEntity* surf
       return dA;
     else
       return dA*(-1.0);
+  }
+  else {
+    printf("%p has no upward adjacency!\n", surf);    
+    return dA;
   }
 }
 
@@ -1953,6 +1962,27 @@ double vd_ext_angle_n(apf::Vector3 pos1, apf::Vector3 pos2,
     return -ang_inner;
 }
 
+// Given an interior direction and two directions, all lying on the same plane,
+// find the angle of the arc that the interior direction dissects.
+double vd_int_angle_n(apf::Vector3 norm_in,
+                    apf::Vector3 norm1, apf::Vector3 norm2, double tol) {
+
+  double ang_inner_arc = std::acos(std::min(std::max(norm1*norm2,-1.0),1.0));
+/*
+  double ang_inner1 = std::acos(std::min(std::max(norm_in*norm2,-1.0),1.0));
+  double ang_inner2 = std::acos(std::min(std::max(norm1*norm_in,-1.0),1.0));
+  // Sum of angles between the disector and the directions is larger than
+  // the angle between the directions.  
+  std::cout << "a1: " << ang_inner1
+            << " a2: " << ang_inner2 
+            << " tol: " << tol 
+            << " a: " << ang_inner_arc << std::endl;
+  if(ang_inner1 + ang_inner2 - tol > ang_inner_arc)
+    return 2*PI_L - ang_inner_arc;
+*/
+  return ang_inner_arc;
+}
+
 // Given two planes and points on each plane, the direction of the line that
 // joins the planes, a center point on one side of the planes, find the exterior
 // angle to the angle that lies on the side of the planes with the center point.
@@ -2124,8 +2154,9 @@ double vd_mean_curv(apf::Mesh2* m, apf::MeshEntity* v, int cell) {
 // that information of repeated neighborhood is needed for the invariant 
 // calculation, this is not the main function used to extract Gaussian curvature.
 // See topo_feat.h. 
-double vd_gauss_curv(apf::Mesh2* m, apf::MeshEntity* v, int cell) {
-}
+//double vd_gauss_curv(apf::Mesh2* m, apf::MeshEntity* v, int cell) {
+//  return 0.;
+//}
 
 // Given a set of triangles joined at a vertex, find the negative of the 
 // gradient of the total area, wrt. the vertex position.
@@ -2406,6 +2437,7 @@ double vd_dist_v_x(apf::Mesh2* m, apf::MeshEntity* v, apf::Vector3 dir,
     }
   }
   assert(hit);
+  return -1;
 }
 
 // Given a vertex v find the displacement to the nearest edge 
@@ -3762,6 +3794,132 @@ int pl_int_tri(apf::Mesh2* m, apf::MeshEntity* ent, apf::Vector3 p_pos,
   }
 }
 
+// Calculate if a triangle intersects a plane. If so, set the direction of the 
+// intersection line and return whether the intersection is valid.
+// If all lie on one side of the plane no intersection, return false.
+// If all lie on the plane, return false.
+// If two lie on the plane and one on one side, return true.
+// If two lie on one side and one on the line, return false.
+// If two lie on one side and one on the other, true.
+// If return value is true, set l_dir as cross product of the p_norm and area 
+// norm. l_pos is the center position of the intersection of the plane and tri.
+bool pl_int_tri_line(apf::Mesh2* m, apf::MeshEntity* ent, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos,
+                                    double tol) {
+  if(tol < 0.)
+    tol = std::numeric_limits<double>::epsilon();
+
+  int ent_type = m->getType(ent);
+  assert(ent_type == apf::Mesh::TRIANGLE);
+  apf::Downward down;
+
+  apf::Vector3 p_temp(0,0,0);
+  std::vector<apf::Vector3> p(3, apf::Vector3(0,0,0));
+  std::vector<double> h(3, 0.);
+  m->getDownward(ent, 0, down);
+  for(int i = 0; i < 3; i++) {
+    m->getPoint(down[i], 0, p.at(i));
+    p_temp = p.at(i) - p_pos;
+    h.at(i) = p_temp*p_norm;
+  }
+  // Counts of vertices above and below the plane.
+  int c_above = 0;
+  int c_below = 0;
+  int i_a = -1;
+  int i_b = -1;
+
+  for(int i = 0; i < 3; i++) {
+    if(h.at(i) > tol) {
+      c_above = c_above + 1;
+      i_a = i;
+    }
+    else if(h.at(i) < -tol) {
+      c_below = c_below + 1;
+      i_b = i;
+    }
+  }
+  for(int i = 0; i < 3; i++)
+    h.at(i) = std::fabs(h.at(i));
+
+  int c_diff = std::abs(c_above - c_below);
+  int c_max = std::max(c_above, c_below);
+
+  // Majority of the cases will be non-intersecting:
+  if(c_max == 3) {
+    return false;
+  }
+  // Intersecting two edges:
+  else if(c_max == 2 and c_diff == 1) {
+    apf::Vector3 a_out = vd_area_out_n(p.at(0), p.at(1), p.at(2));
+    if(a_out.getLength() > tol) {
+      l_dir = norm_0(vd_cross(norm_0(a_out), p_norm));
+      if(c_above > c_below) {
+        i_a = (i_b + 1) % 3;
+        int i_a2 = (i_b + 2) % 3;
+        l_pos = (p.at(i_a)*h.at(i_b) + p.at(i_b)*h.at(i_a))/(h.at(i_b) + h.at(i_a));
+        l_pos = (l_pos + (p.at(i_a2)*h.at(i_b) + p.at(i_b)*h.at(i_a2))/(h.at(i_b) + h.at(i_a2)))/2;
+        return true;
+      }
+      else {
+        i_b = (i_a + 1) % 3;
+        int i_b2 = (i_a + 2) % 3;
+        l_pos = (p.at(i_a)*h.at(i_b) + p.at(i_b)*h.at(i_a))/(h.at(i_b) + h.at(i_a));
+        l_pos = (l_pos + (p.at(i_a)*h.at(i_b2) + p.at(i_b2)*h.at(i_a))/(h.at(i_b2) + h.at(i_a)))/2;
+        return true;
+      }
+    }
+    else
+      return false;
+  }
+  // Intersecting one edge one vertex:
+  else if(c_max == 1 and c_diff == 0) {
+    apf::Vector3 a_out = vd_area_out_n(p.at(0), p.at(1), p.at(2));
+    if(a_out.getLength() > tol) {
+      l_dir = norm_0(vd_cross(norm_0(a_out), p_norm));
+      apf::Vector3 p_1(0,0,0);
+      apf::Vector3 p_2(0,0,0);
+      l_pos = (p.at(i_a)*h.at(i_b) + p.at(i_b)*h.at(i_a))/(h.at(i_b) + h.at(i_a));
+      l_pos = (l_pos + p.at(3 - i_a - i_b))/2;
+      return true;
+    }
+    else
+      return false;
+  }
+  // Intersecting two vertices:
+  else if(c_max == 1 and c_diff == 1) {
+    apf::Vector3 a_out = vd_area_out_n(p.at(0), p.at(1), p.at(2));
+    if(a_out.getLength() > tol) {
+      l_dir = norm_0(vd_cross(norm_0(a_out), p_norm));
+      if(i_a == -1)
+        l_pos = (p.at((i_b + 1)%3) + p.at((i_b + 2)%3))/2;
+      else
+        l_pos = (p.at((i_a + 1)%3) + p.at((i_a + 2)%3))/2;
+      return true;
+    }
+    else
+      return false;
+  }
+  // Intersecting one or three vertices:
+  return false;
+}
+
+// Given a tetrahedron and a plane, find a bounding triangle that intersects the
+// plane. Return true if found and set the line of intersection.
+bool pl_int_tet_line(apf::Mesh2* m, apf::MeshEntity* tet, 
+                                    apf::Vector3 p_pos, apf::Vector3 p_norm, 
+                                    apf::Vector3 &l_dir, apf::Vector3 &l_pos) {
+  std::vector<apf::MeshEntity*> tris(0);
+  vd_set_down(m, tet, &tris);
+
+  for(int i = 0; i < 4; i++) {
+    if(pl_int_tri_line(m, tris.at(i), p_pos, p_norm, l_dir, l_pos))
+      return true;
+  }
+  return false;
+}
+
+
 // Find the intersection of a line and a plane. Assume they intersect.
 apf::Vector3 pl_int_line(apf::Vector3 l_pos, apf::Vector3 l, 
                           apf::Vector3 pl_pos, apf::Vector3 pl_norm) {
@@ -4389,4 +4547,16 @@ apf::Matrix3x3 rot_matrix_dir(apf::Vector3 dir, double angle) {
 
   return apf::Matrix3x3(r11, r12, r13, r21, r22, r23, r31, r32, r33);
 }
+
+// Invert a 3x3 matrix. Uses vd_cross instead of cross which is prone to numerical round-off errors.
+apf::Matrix3x3 vd_invert(apf::Matrix3x3 mat_in) {
+  apf::Matrix3x3 x(0,0,0,0,0,0,0,0,0);
+  apf::Matrix3x3 r(0,0,0,0,0,0,0,0,0);
+  x = apf::transpose(mat_in);
+  r[0] = vd_cross(x[1],x[2]);
+  r[1] = vd_cross(x[2],x[0]);
+  r[2] = vd_cross(x[0],x[1]);
+  return r / apf::getDeterminant(mat_in);
+}
+
 

@@ -1963,6 +1963,7 @@ std::pair<int,int> vd_spur_mesh::get_cell_repl() {
 
   // A entity not connected to any other higher dimensional entity is called.
   assert(c_nbr > 0);
+  return std::make_pair(-1,-1);
 }
 
 // vd_3c_det
@@ -2934,8 +2935,8 @@ void vd_cell_val::load_graph() {
 
 }
 
-int vd_cell_val::find_cell_dj(int dim, apf::MeshEntity* ent, std::vector<int> bound) {
-}
+//int vd_cell_val::find_cell_dj(int dim, apf::MeshEntity* ent, std::vector<int> bound) {
+//}
 
 void vd_cell_val::burn_new() {
   apf::MeshEntity* ent;
@@ -3096,8 +3097,8 @@ void vd_cell_val::burn_new() {
 
 }
 
-std::vector<int> vd_cell_val::burn_bound(int c_dim, apf::MeshEntity* ent) {
-}
+//std::vector<int> vd_cell_val::burn_bound(int c_dim, apf::MeshEntity* ent) {
+//}
 
 vd_cell_val::~vd_cell_val() {
   clear();

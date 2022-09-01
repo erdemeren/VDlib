@@ -2659,7 +2659,9 @@ void vd_glens::split_ctr(std::vector<apf::MeshEntity*> &ee,
       }
     }
   }
-  vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_tets");
+
+  if(save_vtk)
+    vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_tets");
 
   std::cout << "Splitting tris: " << std::endl;
   for (int i = 0; i < es_in.size(); i++) {
@@ -2809,7 +2811,8 @@ void vd_glens::split_ctr(std::vector<apf::MeshEntity*> &ee,
       m->verify();
   }
 
-  vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
+  if(save_vtk)
+    vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
 }
 
 // Imposing r_cvx as the smallest edge length everywhere is too constrictive.
@@ -2941,7 +2944,8 @@ void vd_glens::split_noncvx2(std::vector<apf::MeshEntity*> &ee,
       m->verify();
   }
 
-  vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
+  if(save_vtk)
+    vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
 
 }
 
@@ -3066,7 +3070,8 @@ void vd_glens::split_noncvx(std::vector<apf::MeshEntity*> &ee,
       m->verify();
   }
 
-  vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
+  if(save_vtk)
+    vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_edges");
 
 }
 
@@ -3461,7 +3466,8 @@ bool vd_glens::chk_precond(int dim, int cell_id) {
 // length. The minimum volume should be 1/1000th of the original volume. 
 bool vd_glens::corr_lens_new() {
 
-  vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_before");
+  if(save_vtk)
+    vd_save_vtk_vert(m, &ent.at(0), "./output/Glens_before");
 
   midpoint = apf::Vector3(0,0,0);
 
@@ -4929,7 +4935,8 @@ void vd_glens::evolve_boundaries() {
   apf::Vector3 temp(0,0,0);
   apf::Field* vel_field = m->findField("velocity_field");
 
-  vd_save_vtk_vert(m, vert_ctr, "output/collapsed_before");
+  if(save_vtk)
+    vd_save_vtk_vert(m, vert_ctr, "output/collapsed_before");
 
   if (f_calc != NULL) {
     f_calc->vd_att_fields(m, vert_ctr);
@@ -4995,7 +5002,8 @@ void vd_glens::evolve_boundaries() {
       dt_inv = dt_st/9;
     iter = iter + 1;
   }
-  vd_save_vtk_vert(m, vert_ctr, "output/collapsed_after");
+  if(save_vtk)
+    vd_save_vtk_vert(m, vert_ctr, "output/collapsed_after");
 }
 
 // Return -1 if no cell is collapsed.

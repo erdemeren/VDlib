@@ -81,6 +81,7 @@ enum class VEL_TYPE {
   MASON,
   MASON_MIR,
   MASON_NBC,
+  MASON_NBC_drag,
   KUPRAT,
   KUPRAT_NBC,
   END
@@ -383,13 +384,13 @@ class field_calc {
     ////////////////////////////
     void set_vdparam(vd_param vdpar_in, apf::Mesh2* m);
 
-    double upd_d2(apf::Mesh2* m);
-    double upd_gam2(apf::Mesh2* m);
+    void upd_d2(apf::Mesh2* m);
+    void upd_gam2(apf::Mesh2* m);
 
     // Update the drag coefficient and energy per unit area of the set of 
     // triangles.
-    double upd_d2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val);
-    double upd_gam2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, 
+    void upd_d2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val);
+    void upd_gam2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, 
                                                                      double val);
 
     // Get surface energy of a triangles.
@@ -433,7 +434,6 @@ class field_calc {
     void set_d2_glob(double drag_in);
     double get_d2_glob();
 
-    void dummy_func_stop();
     apf::Vector3 get_vec_special(apf::Mesh2* m, apf::MeshEntity* vert,
                                          apf::Vector3 v_in);
 

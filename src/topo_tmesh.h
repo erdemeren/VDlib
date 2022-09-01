@@ -19,6 +19,8 @@
 #include "topo_topo.h"
 
 #include "topo_graph.h"
+#include "topo_manip.h"
+#include "topo_field.h"
 
 #include "topo_lens.h"
 
@@ -110,7 +112,6 @@ class vd_cell_det {
     vd_cell_det();
     vd_cell_det(apf::Mesh2* m_in, struct cell_base* cb_in,
                                               apf::MeshEntity* v_0cell_in);
-    void dummy_func_stop();
     void load_graph();
 
     // Compare the cell adjacencies with the connectivity of the disjoint sets of
@@ -539,7 +540,6 @@ class vd_cell_val {
     vd_cell_val();
     vd_cell_val(apf::Mesh2* m_in, struct cell_base* cb_in,
                                               apf::MeshEntity* v_0cell_in);
-    void dummy_func_stop();
     void load_graph();
 
     // Using the ids of the bounding disjoint cells, return the id of dim-cell

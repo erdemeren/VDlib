@@ -85,10 +85,12 @@ class ent_conn {
     // Copy
     ent_conn& operator=(const ent_conn& that) {
       conn = that.conn;
+      return *this;
     }
 
     ent_conn& operator=(const std::vector<int>& that) {
       conn = that;
+      return *this;
     }
 
     // ---------------------------------------------------------
@@ -300,10 +302,10 @@ class cell_base {
 
     // Get the list of 1cell neighbors of a 0cell, connected to a specific 
     // 3cell. 
-    bool get_conn_13(int cell0, int cell3, struct ent_conn* e_adj,
+    void get_conn_13(int cell0, int cell3, struct ent_conn* e_adj,
                                            struct ent_conn* e_not);
 
-    bool get_conn_12(int cell0, int cell2, struct ent_conn* e_adj);
+    void get_conn_12(int cell0, int cell2, struct ent_conn* e_adj);
 
     // Given a d-cell-cc check if the cell is bounded by 0cell0.
     bool get_conn_0(int cell0, int c_dim, int c_id);
@@ -402,7 +404,7 @@ class cell_base {
     // Replace cell1 with cell2. Go over the upper cell connection list, check 
     // if tag exists. If so, check if the replacement also exists. If not, 
     // replace tag. 
-    bool repl_cell(int dim, int tag_new, int tag_old);
+    void repl_cell(int dim, int tag_new, int tag_old);
 
     // Extend the cell list of given dim. Add the new cells to the free list. 
     // This should be called when a given free cell list is empty.

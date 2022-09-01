@@ -44,8 +44,6 @@ typedef int vd_Vertex;
 // element of the path list contains indices of the nonintersecting paths.
 typedef std::pair<int,int > cell_cp;
 
-void dummy_graph_stop();
-
 class vd_Edge_desc {
   private:
     int U;

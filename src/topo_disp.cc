@@ -13,6 +13,7 @@ VEL_TYPE conv_str2vel(const std::string& str) {
   if(str == "LAZAR") return VEL_TYPE::LAZAR;
   else if(str == "MASON") return VEL_TYPE::MASON;
   else if(str == "MASON_NBC") return VEL_TYPE::MASON_NBC;
+  else if(str == "MASON_NBC_drag") return VEL_TYPE::MASON_NBC_drag;
   else if(str == "MASON_MIR") return VEL_TYPE::MASON_MIR;
   else if(str == "KUPRAT") return VEL_TYPE::KUPRAT;
   else if(str == "KUPRAT_NBC") return VEL_TYPE::KUPRAT_NBC;
@@ -92,6 +93,7 @@ shell ext_shell::get_shell(int dim, int tag) {
 
   else if(dim == 2)
     return c2_face[tag];
+  return shell(3,1);
 }
 
 void ext_shell::set_shell(int dim, int tag, shell sh, bool state) {
@@ -374,8 +376,8 @@ apf::Vector3 ext_shell::find_dir_mir(shell sh, apf::Vector3 dir) {
 }
 
 
-int ext_shell::find_new_cell_id(int dim, int tag, int tag_0cell) {
 /*
+int ext_shell::find_new_cell_id(int dim, int tag, int tag_0cell) {
 //get the upward adjacencies of all the new 0-1 cells, removing the new cells 
 //these will have the candidate shells
 
@@ -497,8 +499,8 @@ int ext_shell::find_new_cell_id(int dim, int tag, int tag_0cell) {
       }
     }
   }
-*/
 }
+*/
 
 
 void ext_shell::clear() {
@@ -1997,7 +1999,7 @@ apf::MeshEntity* field_calc::create_v(apf::Mesh2* m, apf::ModelEntity* mdl) {
 ////////////////////////////
 // Energy and drag:
 ////////////////////////////
-double field_calc::upd_gam2(apf::Mesh2* m) {
+void field_calc::upd_gam2(apf::Mesh2* m) {
   apf::Field* gam2_field = m->findField("gam2");
   assert(gam2_field);
 
@@ -2028,7 +2030,7 @@ void field_calc::set_vdparam(vd_param vdpar_in, apf::Mesh2* m) {
   upd_gam2(m);
 }
 
-double field_calc::upd_d2(apf::Mesh2* m) {
+void field_calc::upd_d2(apf::Mesh2* m) {
   apf::Field* d2_field = m->findField("d2");
   assert(d2_field);
 
@@ -2051,7 +2053,7 @@ double field_calc::upd_d2(apf::Mesh2* m) {
   m->end(it_e);
 }
 
-double field_calc::upd_gam2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val) {
+void field_calc::upd_gam2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val) {
   apf::Field* gam2_field = m->findField("gam2");
   assert(gam2_field);
 
@@ -2060,7 +2062,7 @@ double field_calc::upd_gam2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, d
   }
 }
 
-double field_calc::upd_d2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val) {
+void field_calc::upd_d2(apf::Mesh2* m, std::vector<apf::MeshEntity*>& tri, double val) {
   apf::Field* d2_field = m->findField("d2");
   assert(d2_field);
 
@@ -2130,6 +2132,10 @@ void field_calc::set_vel_type(VEL_TYPE DT) {
   else if (DT == VEL_TYPE::MASON_NBC) {
     std::cout << "Velocity calculation type: Mason_NBC." << std::endl;
     EoM = new vd_eqn_mason_NBC();
+  }
+  else if (DT == VEL_TYPE::MASON_NBC_drag) {
+    std::cout << "Velocity calculation type: Mason_NBC_drag." << std::endl;
+    EoM = new vd_eqn_mason_NBC_drag();
   }
   else {
     std::cout << "Velocity calculation type: Mason." << std::endl;
@@ -2217,6 +2223,7 @@ bool field_calc::chk_skip(apf::Mesh2* m, apf::MeshEntity* vert) {
 
   else if (!get_ext() and chk_vert_special(m, vert))
     return true;
+  return false;
 }
 
 bool field_calc::chk_vert_special(apf::Mesh2* m, apf::MeshEntity* vert) {
@@ -2228,7 +2235,9 @@ bool field_calc::chk_vert_special(apf::Mesh2* m, apf::MeshEntity* vert) {
 
   if(em_type < 3 and c_base->get_cell_ext_gmi(em_type, em_tag))
     return true;
+  return false;
 }
+
 bool field_calc::chk_0c_cor_gmi(int tag_0cell) {
   if(e_sh->chk_shell(0, tag_0cell - 1)) {
     shell sh = e_sh->get_shell(0, tag_0cell - 1);
@@ -2289,9 +2298,7 @@ double field_calc::get_drag_rat() {
 
 void field_calc::set_drag_rat(double rat_in) {
   drag_rat = rat_in;
-}
-
-void field_calc::dummy_func_stop() {
+  EoM->set_drag_rat(rat_in);
 }
 
 apf::Vector3 field_calc::get_vec_special(apf::Mesh2* m, apf::MeshEntity* vert,
@@ -2359,7 +2366,6 @@ apf::Vector3 field_calc::get_vec_special(apf::Mesh2* m, apf::MeshEntity* vert,
             if(vec_vp*dir < 0)
               dir = dir*(-1);
             vec_vp = dir*(vec_vp*dir);
-            //dummy_func_stop();
           }
         }
       }
@@ -2621,7 +2627,6 @@ void field_calc::fix_vel_special_merg(apf::Mesh2* m,
 }
 
 void field_calc::corr_pos(apf::Mesh2* m) {
-  //dummy_func_stop();
   assert(proj_flag == (int)PROJ_TYPE::EXT_SHELL);
 
   apf::MeshEntity* e_v;
@@ -2657,7 +2662,6 @@ void field_calc::corr_pos(apf::Mesh2* m) {
 }
 
 void field_calc::corr_pos(apf::Mesh2* m, apf::MeshEntity* e_v) {
-  //dummy_func_stop();
   assert(proj_flag == (int)PROJ_TYPE::EXT_SHELL);
 
   apf::ModelEntity* mdl = m->toModel(e_v);

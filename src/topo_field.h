@@ -26,6 +26,9 @@ apf::Field* vd_att_vs_field(apf::Mesh2* m, const char* f_name);
 apf::Field* vd_att_vv_field(apf::Mesh2* m, const char* f_name);
 apf::Field* vd_att_vm_field(apf::Mesh2* m, const char* f_name);
 
+// Attach a scalar field over edges.
+apf::Field* vd_att_es_field(apf::Mesh2* m, const char* f_name);
+
 // Attach a scalar field over triangles.
 apf::Field* vd_att_ts_field(apf::Mesh2* m, const char* f_name);
 

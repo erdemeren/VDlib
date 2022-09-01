@@ -2,19 +2,48 @@
 
 VDLIB is an open source library for simulating grain growth. It is based on  [SCOREC](https://github.com/SCOREC/core), a massively parallelizable open source finite element library developed by Rensselaer Polytechnic Institute. The long term goal of VDLIB is modeling general microstructure evolution by inclusion of additional physics such as crystal plasticity. The user communicates with the objects of the vd_sim class through input files for specifying equations of motion, time integration scheme, and information to extract from the simulation. Example programs are provided in [VDtrials](https://github.com/erdemeren/VDtrials).
 
+## Dependencies ##
+### MPI ###
+This version is built with [OpenMPI v. 3.1.2](https://download.open-mpi.org/release/open-mpi/v3.1/openmpi-3.1.2.tar.gz).
+
+### GSL ###
+This version is built with [GSL v. 2.5](https://ftp.sotirov-bg.net/pub/mirrors/gnu/gsl/gsl-2.5.tar.gz).
+
+To modify the dynamic linker configuration run the following in the terminal before running a program using GSL, or add it to the .bashrc:
+"""
+export LD_LIBRARY_PATH=/directory/gsl/lib:LD_LIBRARY_PATH
+"""
+
+### SCOREC ###
+This version is built with a specific commit of SCOREC and has not been updated for and is not guaranteed to work with the later versions. Please follow the respective installation instructions in [README_SCOREC](README_SCOREC.md).
+
+## Installation ##
+```
+git clone https://github.com/erdemeren/VDlib.git "VDlib"
+cd VDlib
+```
+
+In the Makefile, replace the *SCORECDIR*, *ZOL_PARMETISDIR*, and *GSL_DIR* fields with the respective installation directories.
+
+```
+make all
+```
+
+For example programs, please refer to [VDtrials](https://github.com/erdemeren/VDtrials).
+
 ## Headers ##
 
 topo_cg:
 Relax vertices using a conjugate gradient descent in the energy lanscape. Used to find equilibrium mesh profiles of stable microstructures.
 
 topo_disp:
-Wrapper for equations of motion.
+Mainly defines f_calc class, the wrapper for equations of motion.
 
 topo_edisc:
 Mesh level insertion operations.
 
 topo_energy:
-Currently not used. Class to define energy functions.
+Currently not used. Class to define energy functions to be interfaced through f_calc. 
 
 topo_entlist:
 Reverse topology - entity lookup class.
@@ -68,23 +97,15 @@ topo_write:
 Some of the file input and output functions.
 
 ## Reference ##
-More detailed information about the method is available on the arXiv:
+More detailed information about the method is available on:
+[Topological transitions during grain growth on a finite element mesh](https://doi.org/10.1103/PhysRevMaterials.5.103802).
+The preprint is available on the arXiv:
 [Topological transitions during grain growth on a finite element mesh](https://arxiv.org/abs/2101.12321).
 
-## Dependencies ##
-### MPI ###
-This version is built with [OpenMPI v. 3.1.2](https://download.open-mpi.org/release/open-mpi/v3.1/openmpi-3.1.2.tar.gz).
+## Citing VDlib ##
+Please cite the following paper if you use VDlib:
 
-### GSL ###
-This version is built with [GSL v. 2.5](https://ftp.sotirov-bg.net/pub/mirrors/gnu/gsl/gsl-2.5.tar.gz).
-
-### SCOREC ###
-This version is built with a specific commit of SCOREC and has not been updated and is not guaranteed to work with the later versions. The commit hash is provided below:
-
-```
-git clone -n https://github.com/SCOREC/core.git
-git checkout c341ecd5bf908369d21cca095b067ce6ef4f4e19
-```
+E. Eren, J.K. Mason, Topological transitions during grain growth on a finite element mesh, Phys. Rev. Mater. 5 (2021) 103802, http://dx.doi.org/10.1103/PhysRevMaterials.5.103802.
 
 ## License ##
 VDlib is licensed under either of

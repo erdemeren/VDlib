@@ -46,8 +46,6 @@ void read_0c_pos(std::vector<apf::Vector3>* pos, FILE* f) {
   seek_marker(f, " **vertex");
   gmi_fscanf(f, 1, "%d", &n);
 
-  dummy_clear_stop();
-
   pos->clear();
   pos->resize(n);
 

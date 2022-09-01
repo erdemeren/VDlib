@@ -31,12 +31,6 @@
 // Given the vertex, return the adjacent edges within the triangle.
 int vd_lookup_tri_ed [3][2] = {{0,2},{0,1},{1,2}};
 
-void dummy_clear_stop() {
-}
-
-void dummy_chk_stop() {
-}
-
 // 
 int findIn(const std::vector<apf::MeshEntity* >* es, int n, apf::MeshEntity* e) {
   std::vector<apf::MeshEntity*>::const_iterator it;
@@ -352,8 +346,6 @@ void vd_find_ent_topo(apf::Mesh2* m, apf::MeshEntity* v,
       ep->push_back(ent.at(dim-1).at(i));
     }
   }
-  dummy_clear_stop();
-
   for(int i = 0; i < ent.size(); i++)
     ent.at(i).clear();
 
@@ -361,7 +353,7 @@ void vd_find_ent_topo(apf::Mesh2* m, apf::MeshEntity* v,
 
 // Given an entity set, find the entities member of a certain dimension and 
 // topology.
-// Store in ep*. If no geometry specified, return all, member of any topology 
+// Store in ep*. If no geometry specified (-1), return all, member of any topology
 // of the given dimension.
 void vd_ext_ent_geom(apf::Mesh2* m, const std::vector<apf::MeshEntity*>* ep_in, 
                         std::vector<apf::MeshEntity*>* ep, int geom) {
@@ -372,7 +364,7 @@ void vd_ext_ent_geom(apf::Mesh2* m, const std::vector<apf::MeshEntity*>* ep_in,
   int ent_type = m->getType(ep_in->at(0));
   int d = m->typeDimension[ent_type];
 
-  if ((geom == 0)) {
+  if ((geom == -1)) {
     for (int i = 0; i < ep_in->size(); i++) {
       apf::ModelEntity* em = m->toModel(ep_in->at(i));
       int em_type = m->getModelType(em);
@@ -964,6 +956,97 @@ bool vd_chk_ent_v(apf::Mesh2* m, apf::MeshEntity* ent,
   return false;
 }
 
+apf::MeshEntity* get_tet_bound_tri(apf::Mesh2* m, apf::MeshEntity* tet) {
+
+  apf::Downward ds;
+  m->getDownward(tet, 2, ds);
+
+  bool ext = false;
+  bool bound_1 = false;
+  bool bound_2 = false;
+  apf::ModelEntity* mdl = NULL;
+  int i_ext = -1;
+  for(int i = 0; i < 4; i++) {
+    mdl = m->toModel(ds[i]);
+    int c_type = m->getModelType(mdl);
+
+    if(m->countUpward(ds[i]) == 1) {
+      assert(c_type == 2);
+      ext = true;
+      i_ext = i;
+    }
+    if(c_type == 2) {
+      if(bound_1)
+        bound_2 = true;
+      else
+        bound_1 = true;
+    }
+  }
+  if(ext and bound_2)
+    return ds[i_ext];
+  return NULL;
+}
+
+// Given a 2-stratum triangle bounded by a 1-stratum edge and a 2-stratum vertex,
+// return the 2-stratum vertex. Return NULL if not applicable.
+apf::MeshEntity* get_tri_vert_bound(apf::Mesh2* m, apf::MeshEntity* tri) {
+  apf::Downward dv;
+  m->getDownward(tri, 0, dv);
+
+  apf::ModelEntity* mdl = m->toModel(tri);
+  int c_type = m->getModelType(mdl);
+  assert(c_type == 2);
+  for(int i = 0; i < 3; i++) {
+    if(m->toModel(dv[i]) == mdl)
+      return dv[i];
+  }
+  return NULL;
+}
+/*
+apf::MeshEntity* get_tri_vert_bound(apf::Mesh2* m, apf::MeshEntity* tet, apf::MeshEntity* tri) {
+  apf::Downward dv;
+  m->getDownward(tri, 0, dv);
+
+  apf::ModelEntity* mdl = m->toModel(tri);
+  int c_type = m->getModelType(mdl);
+  assert(c_type == 2);
+  for(int i = 0; i < 3; i++) {
+    if(m->toModel(dv[i]) == mdl)
+      return dv[i];
+  }
+  return NULL;
+}
+*/
+
+apf::MeshEntity* get_tet_bound_vert(apf::Mesh2* m,apf::MeshEntity* tet) {
+  apf::Downward ds;
+  m->getDownward(tet, 2, ds);
+  int tri2_v[4][4] = {{-1, 2, 0, 1}, 
+                      {3, -1, 0, 1}, 
+                      {3, 2, -1, 1}, 
+                      {3, 2, 0, -1}};
+  apf::ModelEntity* mdl = NULL;
+  for(int i = 0; i < 4; i++) {
+    mdl = m->toModel(ds[i]);
+    int c_type = m->getModelType(mdl);
+
+    if(m->countUpward(ds[i]) == 1) {
+      assert(c_type == 2);
+      for(int j = 1; j < 4; j++) {
+        int i_n = (i+j)%4;
+        mdl = m->toModel(ds[i_n]);
+        c_type = m->getModelType(mdl);
+        if(c_type == 2) {
+          m->getDownward(tet, 0, ds);
+          return ds[tri2_v[i][i_n]];
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+
 // Given an element entity set ep1, print lower adjacencies.
 void vd_print_down(apf::Mesh2* m, const std::vector<apf::MeshEntity*>* ep_in) {
 
@@ -1475,6 +1558,20 @@ void vd_print_ent(apf::Mesh2* m) {
 
 }
 
+
+// Print the entities with their cell memberships.
+void vd_print_ent(apf::Mesh2* m, apf::MeshEntity* e) {
+
+  int e_type = m->getType(e);
+  int d = m->typeDimension[e_type];
+
+  apf::ModelEntity* cell = m->toModel(e);
+  int cell_type = m->getModelType(cell);
+  int cell_tag = m->getModelTag(cell);
+  std::cout << d << "-ent " << e << " " << cell_type << "c" << cell_tag
+            << std::endl;
+}
+
 // Find the vertices bounding the given cell.
 void vd_find_cell_v(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim) {
   std::vector<apf::MeshEntity*> es(0);
@@ -1494,6 +1591,22 @@ void vd_rem_cell(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, 
 
   for(int i = 0; i < ev->size(); i++) {
     if (!(cell == m->toModel(ev->at(i)))) {
+      //printf("Vertex %p, cell %p, %dcell%d\n", e, m->toModel(e), 
+      //        m->getModelType(m->toModel(e)), m->getModelTag(m->toModel(e)));
+      ev_d.push_back(ev->at(i));
+    }
+  }
+  *ev = ev_d;
+}
+
+void vd_keep_cell(apf::Mesh2* m, std::vector<apf::MeshEntity*>* ev, int cell_id, int dim) {
+  std::vector<apf::MeshEntity*> ev_d(0);
+  ev_d.reserve(ev->size());
+
+  apf::ModelEntity* cell = m->findModelEntity(dim, cell_id);
+
+  for(int i = 0; i < ev->size(); i++) {
+    if ((cell == m->toModel(ev->at(i)))) {
       //printf("Vertex %p, cell %p, %dcell%d\n", e, m->toModel(e), 
       //        m->getModelType(m->toModel(e)), m->getModelTag(m->toModel(e)));
       ev_d.push_back(ev->at(i));
@@ -1654,7 +1767,8 @@ apf::MeshEntity* vd_find_vert(apf::Mesh2* m, apf::MeshEntity* edge1,
 }
 
 // LOOK
-// Given an entity set, find the entities member of a certain geometry.
+// Given an entity set, find the entities member of a certain geometry and entity
+// dimension.
 // Store in ep*.
 void vd_ext_ent_geom(apf::Mesh2* m, const Entity_set* ep_in, Entity_set* ep, int geom) {
 
@@ -1727,6 +1841,7 @@ bool vd_chk_surf_dom(apf::Mesh2* m, std::vector<apf::MeshEntity*>* es_surf) {
     if(vd_chk_surf_dom(m, es_surf->at(i)))
       return true;
   }
+  return false;
 }
 
 // Check if given vertex is on domain boundary.
@@ -3117,4 +3232,169 @@ void save_vtk_mov(apf::Mesh2* m, int t_in, const char* FileName) {
 double print_map_i2d(std::map<int, double>& mapd, int key) {
   return mapd[key];
 }
+
+
+////////////////////////////////////////////
+// MATLAB related print functions. 
+////////////////////////////////////////////
+
+// Around a vertex, print the adjacent vertex positions and connectivities in a 
+// MATLAB accepted format.
+// v_ctr = [x0, y0, z0];
+// v_pos = [x1, y1, z1; ... 
+//          x2, y2, z2; ... 
+//         ];
+// e_adj is a series from 1 to n_edge as the adjacent vertex ordering follows
+// the edge ordering.
+// e_adj = [e_v_id1;...
+//          e_v_id2;...
+//         ];
+// t_adj = [t_v_id11, t_v_id12;...
+//          t_v_id21, t_v_id22;...
+//         ];
+
+void print_matlab_vert_pos(apf::Mesh2* m, apf::MeshEntity* vert) {
+  std::vector<apf::MeshEntity*> es_vert(0);
+  std::vector<apf::MeshEntity*> es_edge(0);
+  std::vector<apf::MeshEntity*> es_tri(0);
+  std::map<apf::MeshEntity*, int> v_id{};
+
+  vd_set_up(m, vert, &es_edge);
+  vd_set_up(m, &es_edge, &es_tri);
+
+  apf::Vector3 v_pos(0,0,0);
+  apf::Downward down;
+
+  m->getPoint(vert, 0, v_pos);
+  std::cout << "v_ctr = [";
+  std::cout << v_pos[0] << ", " << v_pos[1] << ", " << v_pos[2] << "];";
+  std::cout << std::endl;
+
+  std::cout << "v_pos = [";
+  es_vert.resize(es_edge.size());
+  for(int i = 0; i < es_edge.size(); i++) {
+    m->getDownward(es_edge.at(i), 0, down);
+    if(down[0] == vert) {
+      m->getPoint(down[1], 0, v_pos);
+      es_vert.at(i) = down[1];
+    }
+    else {
+      assert(down[1] == vert);
+      m->getPoint(down[0], 0, v_pos);
+      es_vert.at(i) = down[0];
+    }
+    v_id[es_vert.at(i)] = i;
+    std::cout << v_pos[0] << ", " << v_pos[1] << ", " << v_pos[2] << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+
+  std::cout << "e_adj = [";
+  for(int i = 0; i < es_edge.size(); i++) {
+    std::cout << i << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+
+  std::cout << "t_adj = [";
+  for(int i = 0; i < es_tri.size(); i++) {
+    m->getDownward(es_tri.at(i), 0, down);
+    int v_ctr_id = findIn(down, 3, vert);
+    int v_id1 = v_id[down[(v_ctr_id + 1) % 3]];
+    int v_id2 = v_id[down[(v_ctr_id + 2) % 3]];
+    std::cout << v_id1 << ", " << v_id2 << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+}
+
+// Around a vertex, for adjacent boundary triangles and edges, print the 
+// adjacent vertex positions and the entity connectivities.
+void print_matlab_bound_vert_pos(apf::Mesh2* m, apf::MeshEntity* vert) {
+  std::vector<apf::MeshEntity*> es_vert(0);
+  std::vector<apf::MeshEntity*> es_edge(0);
+  std::vector<apf::MeshEntity*> es_tri(0);
+  std::map<apf::MeshEntity*, int> v_id{};
+
+  vd_set_up(m, vert, &es_edge);
+  vd_set_up(m, &es_edge, &es_tri);
+
+  int c3_nbr = 0;
+  for(int i = 0; i < es_edge.size() - c3_nbr; i++) {
+    apf::ModelEntity* mdl = m->toModel(es_edge.at(i));
+    int c_type = m->getModelType(mdl);
+    int c_tag = m->getModelTag(mdl);
+    if(c_type > 1) {
+      int subs_id = es_edge.size() - c3_nbr - 1;
+      apf::MeshEntity* temp = es_edge.at(i);
+      es_edge.at(i) = es_edge.at(subs_id);
+      es_edge.at(subs_id) = temp;
+      c3_nbr = c3_nbr + 1;
+      i = i - 1;
+    }
+  }
+  es_edge.resize(es_edge.size() - c3_nbr);
+
+  c3_nbr = 0;
+  for(int i = 0; i < es_tri.size() - c3_nbr; i++) {
+    apf::ModelEntity* mdl = m->toModel(es_tri.at(i));
+    int c_type = m->getModelType(mdl);
+    int c_tag = m->getModelTag(mdl);
+    if(c_type == 3) {
+      int subs_id = es_tri.size() - c3_nbr - 1;
+      apf::MeshEntity* temp = es_tri.at(i);
+      es_tri.at(i) = es_tri.at(subs_id);
+      es_tri.at(subs_id) = temp;
+      c3_nbr = c3_nbr + 1;
+      i = i - 1;
+    }
+  }
+  es_tri.resize(es_tri.size() - c3_nbr);
+
+  apf::Vector3 v_pos(0,0,0);
+  apf::Downward down;
+
+  m->getPoint(vert, 0, v_pos);
+  std::cout << "v_ctr = [";
+  std::cout << v_pos[0] << ", " << v_pos[1] << ", " << v_pos[2] << "];";
+  std::cout << std::endl;
+
+  std::cout << "v_pos = [";
+  es_vert.resize(es_edge.size());
+  for(int i = 0; i < es_edge.size(); i++) {
+    m->getDownward(es_edge.at(i), 0, down);
+    if(down[0] == vert) {
+      m->getPoint(down[1], 0, v_pos);
+      es_vert.at(i) = down[1];
+    }
+    else {
+      assert(down[1] == vert);
+      m->getPoint(down[0], 0, v_pos);
+      es_vert.at(i) = down[0];
+    }
+    v_id[es_vert.at(i)] = i;
+    std::cout << v_pos[0] << ", " << v_pos[1] << ", " << v_pos[2] << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+
+  std::cout << "e_adj = [";
+  for(int i = 0; i < es_edge.size(); i++) {
+    std::cout << i << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+
+  std::cout << "t_adj = [";
+  for(int i = 0; i < es_tri.size(); i++) {
+    m->getDownward(es_tri.at(i), 0, down);
+    int v_ctr_id = findIn(down, 3, vert);
+    int v_id1 = v_id[down[(v_ctr_id + 1) % 3]];
+    int v_id2 = v_id[down[(v_ctr_id + 2) % 3]];
+    std::cout << v_id1 << ", " << v_id2 << ";...";
+    std::cout << std::endl;
+  }
+  std::cout << "];" << std::endl;
+}
+
 

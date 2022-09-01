@@ -121,6 +121,7 @@ class vd_eqn_of_motion {
     field_calc* f_calc;
     vd_entlist* e_list;
     apf::Field* vel_field;
+    double drag_rat;
 
   public:
     // Update the velocity field at:
@@ -153,6 +154,7 @@ class vd_eqn_of_motion {
     vd_eqn_of_motion(apf::Mesh2* m_in, cell_base* c_base_in, field_calc* f_calc_in, vd_entlist* e_list_in);
     virtual ~vd_eqn_of_motion();
 
+    void set_drag_rat(double rat_in);
     void refresh(apf::Mesh2* m_in, cell_base* c_base_in, field_calc* f_calc_in, vd_entlist* e_list_in);
     void refresh_elist();
 
@@ -282,6 +284,67 @@ class vd_eqn_mason_NBC : public vd_eqn_of_motion {
     vd_eqn_mason_NBC(const vd_eqn_mason_NBC& that);
     // Copy
     vd_eqn_mason_NBC& operator=(const vd_eqn_mason_NBC& that);
+};
+
+// Neumann BC anistropic drag
+class vd_eqn_mason_NBC_drag : public vd_eqn_of_motion {
+  protected:
+    std::vector<apf::MeshEntity*> es_edge;
+    std::vector<apf::MeshEntity*> es_surf;
+
+    apf::Up up;
+    apf::Downward d_v;
+    apf::Downward d_e;
+
+    apf::Vector3 p_i;
+    apf::Vector3 p_j;
+    apf::Vector3 n_ij;
+    apf::Vector3 p_ctr;
+    apf::Vector3 temp;
+    apf::Vector3 rhs;
+
+    double average;
+
+    apf::Field* vel_field;
+    double drag_rat;
+
+  public:
+    void get_average_tri();
+    void calc_vel_curr(apf::MeshEntity* vert);
+    apf::Vector3 calc_vel_curr_tri(apf::MeshEntity* vert, 
+             std::vector<apf::MeshEntity*>* tris);
+
+    // Update the velocity field at:
+    // Every boundary vertex.
+    void calc_vel();
+    void calc_vel(std::vector<apf::MeshEntity*>* verts, bool drag_local);
+
+    // A single vertex.
+    void vd_upd_vel_field(apf::MeshEntity* vert, bool drag_local = false);
+    apf::Vector3 vd_upd_vel_field_tri(apf::MeshEntity* vert, 
+             std::vector<apf::MeshEntity*>* tris, bool drag_local = false);
+    apf::Vector3 vd_upd_vel_field_edge(apf::MeshEntity* vert, 
+               std::vector<apf::MeshEntity*>* edges, bool drag_local = false);
+
+    // A set of vertices while skipping labeled vertices.
+    void vd_upd_vel_field_merg(std::vector<apf::MeshEntity*> &vert,
+                           std::map<apf::MeshEntity*, apf::MeshEntity*> &v_map,
+                           bool drag_local = false);
+
+    // Calculate the force acting on a vertex.
+    apf::Vector3 vd_calc_force(apf::MeshEntity* vert);
+    apf::Vector3 vd_calc_force_tri(apf::MeshEntity* vert, 
+                           std::vector<apf::MeshEntity*>* tris);
+
+    apf::Vector3 vd_calc_force_edge(apf::MeshEntity* vert, 
+                           std::vector<apf::MeshEntity*>* edges);
+    vd_eqn_mason_NBC_drag();
+    vd_eqn_mason_NBC_drag(apf::Mesh2* m_in, cell_base* c_base_in, field_calc* f_calc_in, vd_entlist* e_list_in);
+    ~vd_eqn_mason_NBC_drag();
+    // Copy constructor
+    vd_eqn_mason_NBC_drag(const vd_eqn_mason_NBC_drag& that);
+    // Copy
+    vd_eqn_mason_NBC_drag& operator=(const vd_eqn_mason_NBC_drag& that);
 };
 
 class vd_eqn_lazar : public vd_eqn_of_motion {

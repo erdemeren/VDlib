@@ -277,11 +277,12 @@ void gmi_write_tess(struct gmi_model* m, const char* filename)
   fclose(f);
 }
 
-void ReadNumbers(const std::string& filename, char sep, 
+void ReadNumbers(const std::string& filename, const char* sep, 
                              std::vector<std::vector<int> > & output) {
   std::ifstream src(filename);
-  std::string delim(&sep);
+  std::string delim(sep);
   std::vector<std::string> temp(0, std::string(""));
+  output.clear();
 
   if (!src) {
     std::cerr << "\aError opening file.\n\n";
@@ -300,11 +301,12 @@ void ReadNumbers(const std::string& filename, char sep,
 }
 
 
-void ReadNumbers(const std::string& filename, char sep, 
+void ReadNumbers(const std::string& filename, const char* sep, 
                              std::vector<std::vector<double> > & output) {
   std::ifstream src(filename);
-  std::string delim(&sep);
+  std::string delim(sep);
   std::vector<std::string> temp(0, std::string(""));
+  output.clear();
 
   if (!src) {
     std::cerr << "\aError opening file.\n\n";
@@ -323,14 +325,15 @@ void ReadNumbers(const std::string& filename, char sep,
 }
 
 
-void ReadNames(const std::string& filename, char sep, 
+void ReadNames(const std::string& filename, const char* sep, 
                              std::vector<std::vector<std::string> > & output) {
   std::ifstream src(filename);
-  std::string delim(&sep);
+  std::string delim(sep);
   std::vector<std::string> temp(0, std::string(""));
+  output.clear();
 
   if (!src) {
-    std::cerr << "\aError opening file.\n\n";
+    std::cerr << "\aError opening " << filename << ".\n\n";
     exit(EXIT_FAILURE);
   }
   std::string buffer("");

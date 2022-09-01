@@ -370,6 +370,8 @@ class vd_edisc {
 
     // Record each step of the relaxation iteration.
     bool mov_flag;
+    // Verbosity flag.
+    bool verb_flag;
 
     bool isotropic;
     bool drag_flag;
@@ -477,6 +479,9 @@ class vd_edisc {
     double rat_init;
 
     double len_edge;
+
+    // Controls whether sub vtk files are generated or not.
+    bool sub_vtk;
 
     // The trial and preconditioned mesh center vertices.
     apf::MeshEntity* vert_ctr_cp;
@@ -684,7 +689,7 @@ class vd_edisc {
 
     // After calculating the new vertex motions, go over the discs to find 
     // inverting elements.
-    bool detect_inv_pre();
+    void assert_inv_pre();
     bool detect_inv();
     bool detect_inv(int disc_id, apf::Vector3 v_pos, apf::Vector3 mot_dir);
 
@@ -809,7 +814,7 @@ class vd_edisc {
                          double &r_min, double &r_max,
                          double &r_th_min, double &r_th_max, 
                          double &ang_th, double rat_t);
-    double move_vert_ext(std::vector<apf::Vector3> &v_ctr, 
+    void move_vert_ext(std::vector<apf::Vector3> &v_ctr, 
                                std::vector<apf::Vector3> &v_ctr_old, 
                                std::vector<apf::Vector3> &v_sp,
                                std::vector<apf::Vector3> &v_sp_old, 
@@ -886,9 +891,9 @@ class vd_edisc {
 
     // By collecting the edges in the disjoint graph, find the entities to  
     // seperate with the top vertex.
-    bool get_disc_edges(std::vector<ent_conn>* cs_in, ent_conn* c2_circ, 
+    void get_disc_edges(std::vector<ent_conn>* cs_in, ent_conn* c2_circ, 
       ent_conn* c3_circ, vd_disc* disc_in);
-    bool get_disc_edges(circuit* circ_in, vd_disc* disc_in);
+    void get_disc_edges(circuit* circ_in, vd_disc* disc_in);
 
     // Select the 0cell to be split. 
     bool set_0cell(int cell, bool spur_in = false);
@@ -1082,6 +1087,8 @@ class vd_edisc {
     void collect_pc();
     void overwrite_pc(vd_disc_cut* vd_cut);
 
+    void refresh_e();
+
     bool burn_the_cut_c2(int k, vd_disc_cut* vd_cut, vd_plane* pl);
     apf::MeshEntity* burn_c3_edge(apf::MeshEntity* e_curr,
                                      vd_disc_cut* vd_cut, vd_plane* pl);
@@ -1173,6 +1180,10 @@ class vd_edisc {
     void vtk_precond();
     void vtk_mesh();
 
+    void set_sub_vtk_flag(bool vtk_flag);
+
+    // Set whether to print terminal output related to substeps.
+    void set_verbose_flag(bool flag_in);
 
     // Given a list of 2shells, find the joint shell.
     shell get_2shell_joint(std::vector<int>* shell_2_ids);
